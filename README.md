@@ -184,13 +184,13 @@ C:\Users\admin\DeskBox\其他\Web工作台\
   ```powershell
   python server.py
   ```
-
 - **macOS 用户**：
-  在终端中运行：
-  ```bash
-  chmod +x start.sh
-  ./start.sh
-  ```
+  - **双击启动**：直接双击根目录下的 `start.command`（若首次提示权限，终端执行一次 `chmod +x start.command` 即可）；
+  - **终端启动**：在终端中运行：
+    ```bash
+    chmod +x start.sh
+    ./start.sh
+    ```
   *(脚本将自动识别 python3 环境并唤起浏览器访问 `http://127.0.0.1:8765/`)*
 
 ### 5.2 检验接口与参考图 Base64 状态
