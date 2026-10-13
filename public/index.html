@@ -180,26 +180,26 @@
     </div>
     <div class="header-actions">
       <button class="btn btn-outline btn-sm" onclick="openVGFolder()">📁 打开 VG 根目录</button>
-      <button class="btn btn-success btn-sm" onclick="resetAllAccounts()">🌅 26 账号今日满血重置</button>
+      <button class="btn btn-success btn-sm" id="btn-reset-accounts" onclick="resetAllAccounts()">🌅 账号算力今日满血重置</button>
       <button class="btn btn-outline btn-sm" onclick="refreshAll()">🔄 刷新数据</button>
     </div>
   </header>
 
   <!-- 选项卡切换 -->
   <div class="nav-tabs">
-    <button class="tab-btn active" onclick="switchTab('matrix')">⚡ 26 账号算力矩阵</button>
-    <button class="tab-btn" onclick="switchTab('kanban')">📋 每日制作流水线 (15条)</button>
+    <button class="tab-btn active" id="tab-btn-matrix" onclick="switchTab('matrix')">⚡ 账号算力矩阵</button>
+    <button class="tab-btn" onclick="switchTab('kanban')">📋 每日制作流水线</button>
     <button class="tab-btn" onclick="switchTab('scaffold')">🏗️ 资产规范脚手架</button>
     <button class="tab-btn" onclick="switchTab('plugin')">🔌 豆包一键填词助手</button>
   </div>
 
   <main>
-    <!-- 选项卡 1：26 账号矩阵 -->
+    <!-- 选项卡 1：账号矩阵 -->
     <div id="tab-matrix" class="tab-content active">
       <div class="stats-row">
         <div class="stat-card">
           <div class="stat-label">总纳管 Chrome 资料</div>
-          <div class="stat-val" id="stat-total-acc">26 个</div>
+          <div class="stat-val" id="stat-total-acc">0 个</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">今日可用账号数</div>
@@ -212,7 +212,7 @@
       </div>
 
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
-        <h2 style="font-size: 16px; font-weight: 600;">26 账号算力池监控网格</h2>
+        <h2 style="font-size: 16px; font-weight: 600;" id="matrix-title-heading">账号算力池监控网格</h2>
         <div style="display: flex; gap: 8px;">
           <button class="btn btn-outline btn-sm" onclick="filterAccounts('all')">显示全部</button>
           <button class="btn btn-outline btn-sm" onclick="filterAccounts('ready')">仅看有余额</button>
@@ -304,7 +304,7 @@
 
         <!-- 右侧：管理操作按钮组 -->
         <div class="toolbar-actions">
-          <button class="btn btn-primary btn-sm" onclick="autoAssignAccountsSmart()" style="background: linear-gradient(135deg, #3b82f6, #8b5cf6); border: none; font-weight: 600; padding: 6px 12px;" title="按 01-26 账号今日剩余额度自动均匀分配给未分配任务">
+          <button class="btn btn-primary btn-sm" onclick="autoAssignAccountsSmart()" style="background: linear-gradient(135deg, #3b82f6, #8b5cf6); border: none; font-weight: 600; padding: 6px 12px;" title="按算力池账号今日剩余额度自动均匀分配给未分配任务">
             ⚡ 智能分配账号
           </button>
           <button class="btn btn-outline btn-sm" onclick="openTaskPickerDrawer()" title="从当前产品中挑选变体脚本追加到流水线">
@@ -630,7 +630,10 @@
         card.innerHTML = `
           <div class="account-card-header">
             <div>
-              <div class="account-name">${acc.name}</div>
+              <div class="account-name" style="display: flex; align-items: center; gap: 6px;">
+                <span style="font-size: 11px; padding: 1px 5px; border-radius: 4px; background: #334155; color: #93c5fd; font-weight: 700;">#${String(acc.seq || '').padStart(2, '0')}</span>
+                <span>${acc.name}</span>
+              </div>
               <div class="account-sub">${acc.id}</div>
             </div>
             ${statusBadge}
@@ -660,12 +663,21 @@
     }
 
     function updateStats() {
+      const totalCount = globalAccounts.length;
       const activeAccs = globalAccounts.filter(a => a.status !== 'disabled');
-      document.getElementById('stat-total-acc').innerText = `${activeAccs.length} / ${globalAccounts.length} 个`;
+      document.getElementById('stat-total-acc').innerText = `${activeAccs.length} / ${totalCount} 个`;
       const readyAccs = activeAccs.filter(a => a.remaining_10s > 0);
       document.getElementById('stat-ready-acc').innerText = readyAccs.length + ' 个';
       const total10s = activeAccs.reduce((sum, a) => sum + (a.remaining_10s || 0), 0);
       document.getElementById('stat-total-10s').innerText = total10s + ' 条';
+
+      // 动态更新选项卡和标题中的账号数量
+      const tabMatrixBtn = document.getElementById('tab-btn-matrix');
+      if (tabMatrixBtn) tabMatrixBtn.innerText = `⚡ ${totalCount} 账号算力矩阵`;
+      const matrixHeading = document.getElementById('matrix-title-heading');
+      if (matrixHeading) matrixHeading.innerText = `${totalCount} 账号算力池监控网格`;
+      const resetBtn = document.getElementById('btn-reset-accounts');
+      if (resetBtn) resetBtn.innerText = `🌅 ${totalCount} 账号今日满血重置`;
     }
 
     function filterAccounts(type) {
@@ -1347,7 +1359,8 @@
             const specKey = task.spec === '5s' ? 'remaining_5s' : (task.spec === '15s' ? 'remaining_15s' : 'remaining_10s');
             const quotaRem = a[specKey] !== undefined ? a[specKey] : a.remaining_10s;
             const quotaLabel = task.spec === '5s' ? `${quotaRem}条/5s` : (task.spec === '15s' ? `${quotaRem}条/15s` : `${quotaRem}条/10s`);
-            accountOptions += `<option value="${a.id}" ${task.assignedAccount === a.id ? 'selected' : ''}>${a.name} (${quotaLabel})</option>`;
+            const seqPrefix = a.seq ? `[#${String(a.seq).padStart(2, '0')}] ` : '';
+            accountOptions += `<option value="${a.id}" ${task.assignedAccount === a.id ? 'selected' : ''}>${seqPrefix}${a.name} (${quotaLabel})</option>`;
           });
 
           // 时长规格徽标样式
@@ -1436,8 +1449,9 @@
           const accObj = globalAccounts.find(a => a.id === accId);
           if (accObj && accObj.status === 'disabled') return;
           const name = accObj ? accObj.name : accId;
+          const seqPrefix = (accObj && accObj.seq) ? `[#${String(accObj.seq).padStart(2, '0')}] ` : '';
           const count = assignedMap[accId];
-          sameHtml += `<option value="${accId}">${name} (${count}条待发)</option>`;
+          sameHtml += `<option value="${accId}">${seqPrefix}${name} (${count}条待发)</option>`;
         });
         selSame.innerHTML = sameHtml;
       }
@@ -1796,7 +1810,7 @@
         autoAssignAccountsSmart(true); // 静默自动分配
         const stillUnassigned = tasksToLaunch.filter(t => !t.assignedAccount);
         if (stillUnassigned.length > 0) {
-          alert(`⚠️ 算力池可用额度不足！\n有 ${stillUnassigned.length} 条已选任务无法自动分配可用账号，请在 26 账号矩阵中重置或调整账号额度后再试。`);
+          alert(`⚠️ 算力池可用额度不足！\n有 ${stillUnassigned.length} 条已选任务无法自动分配可用账号，请在账号矩阵中重置或调整账号额度后再试。`);
           return;
         }
       }
@@ -2168,28 +2182,48 @@
       fetch('/api/vg/open_folder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: "C:\\Users\\admin\\DeskBox\\其他\\VG" })
+        body: JSON.stringify({ type: "vg_root" })
       });
     }
 
     function openCurrentRefFolder() {
       const prodName = document.getElementById('select-product').value;
       if (!prodName) { alert('请先选择产品'); return; }
-      const path = `C:\\Users\\admin\\DeskBox\\其他\\VG\\${prodName}\\产品参考图`;
       fetch('/api/vg/open_folder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: path })
+        body: JSON.stringify({ type: "product_ref", product: prodName })
       });
+    }
+
+    function openCurrentProductRefFolderDirect() {
+      let prodName = '';
+      if (currentTasks.length > 0 && currentTasks[0].path) {
+        const match = currentTasks[0].path.match(/VG[\/\\]([^\/\\]+)/i);
+        if (match) prodName = match[1];
+      }
+      if (!prodName && globalVGTree && globalVGTree.length > 0) {
+        prodName = globalVGTree[0].name;
+      }
+      if (!prodName) {
+        alert('当前没有可定位的产品目录！');
+        return;
+      }
+      fetch('/api/vg/open_folder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: "product_ref", product: prodName })
+      });
+      showToast(`已在文件管理器中打开 [${prodName}] 参考图目录`);
     }
 
     function openExtensionFolder() {
       fetch('/api/vg/open_folder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: "C:\\Users\\admin\\DeskBox\\其他\\Web工作台\\vg_extension" })
+        body: JSON.stringify({ type: "extension" })
       });
-      showToast('已在资源管理器中打开插件文件夹！请将其拖入 chrome://extensions 页面安装');
+      showToast('已在系统文件管理器中打开插件文件夹！请将其加载至 chrome://extensions 页面');
     }
 
     // 3. 脚手架操作

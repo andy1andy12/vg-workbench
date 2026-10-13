@@ -2,9 +2,9 @@
   "Profile 7": {
     "id": "Profile 7",
     "name": "01-15059791395",
-    "remaining_10s": 0,
-    "remaining_5s": 0,
-    "remaining_15s": 0,
+    "remaining_10s": 5,
+    "remaining_5s": 10,
+    "remaining_15s": 4,
     "status": "ready",
     "notes": "",
     "last_used": ""
@@ -12,9 +12,9 @@
   "Profile 16": {
     "id": "Profile 16",
     "name": "02-15159823622",
-    "remaining_10s": 0,
-    "remaining_5s": 0,
-    "remaining_15s": 0,
+    "remaining_10s": 5,
+    "remaining_5s": 10,
+    "remaining_15s": 4,
     "status": "ready",
     "notes": "",
     "last_used": ""
@@ -22,9 +22,9 @@
   "Profile 15": {
     "id": "Profile 15",
     "name": "03-15260793277-X",
-    "remaining_10s": 0,
-    "remaining_5s": 0,
-    "remaining_15s": 0,
+    "remaining_10s": 5,
+    "remaining_5s": 10,
+    "remaining_15s": 4,
     "status": "ready",
     "notes": "",
     "last_used": ""
@@ -32,9 +32,9 @@
   "Profile 22": {
     "id": "Profile 22",
     "name": "04-15260816829",
-    "remaining_10s": 0,
-    "remaining_5s": 0,
-    "remaining_15s": 0,
+    "remaining_10s": 5,
+    "remaining_5s": 10,
+    "remaining_15s": 4,
     "status": "ready",
     "notes": "",
     "last_used": ""
@@ -42,9 +42,9 @@
   "Profile 14": {
     "id": "Profile 14",
     "name": "05-15750926126",
-    "remaining_10s": 0,
-    "remaining_5s": 0,
-    "remaining_15s": 0,
+    "remaining_10s": 5,
+    "remaining_5s": 10,
+    "remaining_15s": 4,
     "status": "ready",
     "notes": "",
     "last_used": ""
@@ -52,9 +52,9 @@
   "Profile 20": {
     "id": "Profile 20",
     "name": "06-15805078235",
-    "remaining_10s": 0,
-    "remaining_5s": 0,
-    "remaining_15s": 0,
+    "remaining_10s": 5,
+    "remaining_5s": 10,
+    "remaining_15s": 4,
     "status": "ready",
     "notes": "",
     "last_used": ""
@@ -62,9 +62,9 @@
   "Profile 12": {
     "id": "Profile 12",
     "name": "07-15906394532",
-    "remaining_10s": 0,
-    "remaining_5s": 0,
-    "remaining_15s": 0,
+    "remaining_10s": 5,
+    "remaining_5s": 10,
+    "remaining_15s": 4,
     "status": "ready",
     "notes": "",
     "last_used": ""
@@ -72,9 +72,9 @@
   "Profile 11": {
     "id": "Profile 11",
     "name": "08-17350011949",
-    "remaining_10s": 0,
-    "remaining_5s": 0,
-    "remaining_15s": 0,
+    "remaining_10s": 5,
+    "remaining_5s": 10,
+    "remaining_15s": 4,
     "status": "ready",
     "notes": "",
     "last_used": ""
@@ -102,9 +102,9 @@
   "Profile 13": {
     "id": "Profile 13",
     "name": "11-17859153651",
-    "remaining_10s": 0,
-    "remaining_5s": 0,
-    "remaining_15s": 0,
+    "remaining_10s": 5,
+    "remaining_5s": 10,
+    "remaining_15s": 4,
     "status": "ready",
     "notes": "",
     "last_used": ""
@@ -112,9 +112,9 @@
   "Profile 8": {
     "id": "Profile 8",
     "name": "12-18046333880",
-    "remaining_10s": 0,
-    "remaining_5s": 0,
-    "remaining_15s": 0,
+    "remaining_10s": 5,
+    "remaining_5s": 10,
+    "remaining_15s": 4,
     "status": "ready",
     "notes": "",
     "last_used": ""
@@ -122,9 +122,9 @@
   "Profile 19": {
     "id": "Profile 19",
     "name": "13-18065220912",
-    "remaining_10s": 5,
-    "remaining_5s": 10,
-    "remaining_15s": 4,
+    "remaining_10s": 2,
+    "remaining_5s": 4,
+    "remaining_15s": 1,
     "status": "ready",
     "notes": "",
     "last_used": ""

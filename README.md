@@ -150,18 +150,21 @@ C:\Users\admin\DeskBox\其他\Web工作台\
 
 | 方法 | 路径 | 参数 / Body | 说明 |
 | :--- | :--- | :--- | :--- |
-| `GET` | `/api/accounts` | 无 | 获取所有 26 个账号的配置与今日剩余额度 |
-| `POST`| `/api/accounts/update` | `{"id": "01_...", "delta_10s": -1, ...}` | 更新账号额度或状态 |
+| `GET` | `/api/system/info` | 无 | 获取当前宿主系统环境（Win/Mac）、VG 实际根路径与 Chrome 路径 |
+| `GET` | `/api/accounts` | 无 | 全自动扫描获取所有 Chrome Profile 账号与今日剩余额度（自动自然排序并分配序列号） |
+| `POST`| `/api/accounts/update` | `{"id": "Profile 7", "delta_10s": -1, ...}` | 更新账号额度或状态 |
 | `GET` | `/api/tasks` | 无 | 获取当前流水线工单列表 |
 | `POST`| `/api/tasks/save` | `{"tasks": [...]}` | 保存当前流水线工单并生成历史快照 |
 | `GET` | `/api/vg/tree` | 无 | 全层级深度扫描 VG 目录结构与提示词树 |
-| `GET` | `/api/task/context` | `?task_id=V01` 或 `?account=01_...` | 获取指定任务全文、正文顺序参考图（含Base64） |
-| `POST`| `/api/accounts/launch_task` | `{"account_id": "01_...", "task_id": "V01"}` | 启动指定 Chrome Profile 并打开带任务参数的豆包 |
+| `GET` | `/api/task/context` | `?task_id=V01` 或 `?account=Profile 7` | 获取指定任务全文、正文顺序参考图（含Base64） |
+| `POST`| `/api/accounts/launch` | `{"id": "Profile 7"}` | 跨平台打开指定 Chrome Profile 豆包窗口并前台置顶 |
+| `POST`| `/api/accounts/launch_task` | `{"account_id": "Profile 7", "task_ids": ["V01"]}` | 启动指定 Chrome Profile 并打开带任务参数的豆包（Win/Mac自适应） |
 | `POST`| `/api/task/mark_step` | `{"task_id": "V01", "step": "sent", "value": true}` | 标记任务流转步骤并联动扣减账号额度 |
 | `POST`| `/api/task/report_video`| `{"task_id": "V01", "video_url": "..."}` | 扩展上报捕获到的无水印视频直链 |
 | `POST`| `/api/tasks/download_videos` | `{"task_ids": ["V01", ...]}` | 服务端流式下载视频到对应产品的【成品/素材/】目录 |
 | `GET` | `/api/video` | `?path=...` | 本地成片流式预览接口 |
-| `POST`| `/api/vg/open_material_folder` | `{"product": "014_Lyft指示灯"}` | 唤起资源管理器打开产品素材目录 |
+| `POST`| `/api/vg/open_folder` | `{"type": "vg_root" \| "extension" \| "product_ref"}` | 跨平台在系统文件管理器 (资源管理器/Finder) 中打开指定目录 |
+| `POST`| `/api/vg/open_material_folder` | `{"prod_name": "014_Lyft指示灯"}` | 唤起系统文件管理器打开产品素材目录 (Win/Mac自适应) |
 | `GET` | `/api/tasks/snapshots` | 无 | 获取历史自动保存的时间戳快照列表 |
 | `POST`| `/api/tasks/restore_snapshot` | `{"filename": "snapshot_..."}` | 一键回滚恢复历史快照数据 |
 
@@ -170,12 +173,20 @@ C:\Users\admin\DeskBox\其他\Web工作台\
 ## 5. 本地开发、调试与运维常用命令
 
 ### 5.1 启动 / 重启后台服务
-```powershell
-# 1. 直接双击运行 start.bat，或在命令行中运行：
-python "C:\Users\admin\DeskBox\其他\Web工作台\server.py"
 
-# 2. 服务运行端口：http://127.0.0.1:8765/
-```
+- **Windows 用户**：
+  双击根目录下的 `start.bat`，或在命令行中运行：
+  ```powershell
+  python server.py
+  ```
+
+- **macOS 用户**：
+  在终端中运行：
+  ```bash
+  chmod +x start.sh
+  ./start.sh
+  ```
+  *(脚本将自动识别 python3 环境并唤起浏览器访问 `http://127.0.0.1:8765/`)*
 
 ### 5.2 检验接口与参考图 Base64 状态
 当怀疑参考图丢图或接口未返回 Base64 时，可使用一行 Python 快速自测：

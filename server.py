@@ -22,19 +22,107 @@ if sys.platform == "win32":
     except Exception:
         pass
 
+IS_WIN = (sys.platform == "win32")
+IS_MAC = (sys.platform == "darwin")
+
 PORT = 8765
-WORKBENCH_DIR = Path(r"C:\Users\admin\DeskBox\其他\Web工作台")
+WORKBENCH_DIR = Path(__file__).resolve().parent
 DATA_DIR = WORKBENCH_DIR / "data"
 PUBLIC_DIR = WORKBENCH_DIR / "public"
-VG_ROOT = Path(r"C:\Users\admin\DeskBox\其他\VG")
-CHROME_EXE = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
-SCAFFOLD_SCRIPT = Path(r"c:\Users\admin\.agents\.agents\skills\vg-index-checker\scripts\scaffold.py")
+
+# 动态相对探测 VG 根目录：优先同级 ../VG，其次环境变量，最后回退
+def resolve_vg_root():
+    candidate = WORKBENCH_DIR.parent / "VG"
+    if candidate.exists() and candidate.is_dir():
+        return candidate
+    env_root = os.environ.get("VG_ROOT")
+    if env_root and Path(env_root).exists():
+        return Path(env_root)
+    if IS_WIN:
+        fallback = Path(r"C:\Users\admin\DeskBox\其他\VG")
+        if fallback.exists():
+            return fallback
+    elif IS_MAC:
+        fallback = Path.home() / "DeskBox" / "其他" / "VG"
+        if fallback.exists():
+            return fallback
+    return WORKBENCH_DIR.parent / "VG"
+
+VG_ROOT = resolve_vg_root()
+
+# 动态探测 Chrome 执行路径
+def resolve_chrome_exe():
+    env_chrome = os.environ.get("CHROME_PATH")
+    if env_chrome and os.path.exists(env_chrome):
+        return env_chrome
+    if IS_WIN:
+        candidates = [
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+            os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe")
+        ]
+        for c in candidates:
+            if os.path.exists(c):
+                return c
+        return r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+    elif IS_MAC:
+        mac_candidates = [
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            os.path.expanduser("~/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
+        ]
+        for c in mac_candidates:
+            if os.path.exists(c):
+                return c
+        return "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+    return "google-chrome"
+
+CHROME_EXE = resolve_chrome_exe()
+
+# 动态探测 Chrome User Data 根目录 (Local State)
+def resolve_chrome_user_data_dir():
+    if IS_WIN:
+        return Path(os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\User Data"))
+    elif IS_MAC:
+        return Path.home() / "Library" / "Application Support" / "Google" / "Chrome"
+    else:
+        return Path.home() / ".config" / "google-chrome"
+
+CHROME_USER_DATA_DIR = resolve_chrome_user_data_dir()
+
+# 动态探测脚手架脚本
+def resolve_scaffold_script():
+    candidates = [
+        Path.home() / ".agents" / ".agents" / "skills" / "vg-index-checker" / "scripts" / "scaffold.py",
+        Path.home() / ".agents" / "skills" / "vg-index-checker" / "scripts" / "scaffold.py",
+        WORKBENCH_DIR / "scripts" / "scaffold.py"
+    ]
+    for c in candidates:
+        if c.exists():
+            return c
+    return candidates[0]
+
+SCAFFOLD_SCRIPT = resolve_scaffold_script()
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 PUBLIC_DIR.mkdir(parents=True, exist_ok=True)
 
+def open_file_or_dir(target_path):
+    """跨平台在系统文件管理器中打开目录或文件"""
+    p_str = str(target_path)
+    if IS_WIN:
+        try:
+            os.startfile(p_str)
+        except Exception:
+            subprocess.Popen(f'explorer.exe "{p_str}"', shell=True)
+    elif IS_MAC:
+        subprocess.run(["open", p_str], check=False)
+    else:
+        subprocess.run(["xdg-open", p_str], check=False)
+
 def ensure_launch_task():
-    """确保 Windows 交互式桌面调度桥梁已注册"""
+    """确保 Windows 交互式桌面调度桥梁已注册 (仅 Windows 需要)"""
+    if not IS_WIN:
+        return
     bat_path = Path(r"C:\Users\admin\launch_account.bat")
     if not bat_path.exists():
         bat_path.write_text("@echo off\r\n", encoding="gbk")
@@ -46,8 +134,8 @@ ensure_launch_task()
 # ----------------- 数据存取工具 -----------------
 
 def get_chrome_profiles():
-    """扫描 Chrome 实际的 User Data 获取 26 个豆包专用资料信息，严格按 01-26 排序"""
-    local_state_path = Path(os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\User Data\Local State"))
+    """全自动扫描并纳管所有有效 Chrome Profile，按数字与名称自然排序并动态编号"""
+    local_state_path = CHROME_USER_DATA_DIR / "Local State"
     profiles = []
     if not local_state_path.exists():
         return profiles
@@ -56,19 +144,29 @@ def get_chrome_profiles():
             data = json.load(f)
         info_cache = data.get("profile", {}).get("info_cache", {})
         for p_id, p_info in info_cache.items():
+            if p_info.get("is_ephemeral") or p_info.get("is_omitted_from_profile_list"):
+                continue
             name = p_info.get("name", "").strip()
-            # 过滤出专门以数字开头的 26 个豆包账号 (如 01-15059791395)
-            m = re.match(r"^(\d+)-", name)
-            if m:
-                seq_num = int(m.group(1))
-                profiles.append({
-                    "id": p_id,
-                    "name": name,
-                    "seq": seq_num,
-                    "avatar": p_info.get("avatar_icon", ""),
-                })
-        # 严格按照 01 到 26 正序排列！
-        profiles.sort(key=lambda x: x["seq"])
+            if not name:
+                name = p_id
+            
+            # 提取名称中出现的首个数字作为主要排序权重（如 01-, 2-, 豆包3）
+            num_matches = re.findall(r"\d+", name)
+            primary_num = int(num_matches[0]) if num_matches else 999999
+            
+            profiles.append({
+                "id": p_id,
+                "name": name,
+                "primary_num": primary_num,
+                "avatar": p_info.get("avatar_icon", ""),
+            })
+
+        # 智能自然排序：先按数字大小，再按名称字母，最后按 Profile ID
+        profiles.sort(key=lambda x: (x["primary_num"], x["name"].lower(), x["id"]))
+
+        # 动态分配 1..N 的流水线显示序列
+        for idx, p in enumerate(profiles, start=1):
+            p["seq"] = idx
     except Exception as e:
         print(f"[Error] 读取 Chrome profiles 失败: {e}")
     return profiles
@@ -91,6 +189,7 @@ def load_accounts_quota():
         # 默认每天容量：5条10s 或 10条5s (以点数单位计数，默认5个10s额度)
         accounts.append({
             "id": p_id,
+            "seq": p.get("seq", 1),
             "name": p["name"],
             "remaining_10s": saved.get("remaining_10s", 5),
             "remaining_5s": saved.get("remaining_5s", 10),
@@ -465,7 +564,19 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         path = url.path
 
-        if path == "/api/accounts":
+        if path == "/api/system/info":
+            self.send_json({
+                "code": 0,
+                "data": {
+                    "platform": "mac" if IS_MAC else ("win" if IS_WIN else "linux"),
+                    "vg_root": str(VG_ROOT).replace("\\", "/"),
+                    "workbench_dir": str(WORKBENCH_DIR).replace("\\", "/"),
+                    "chrome_exe": str(CHROME_EXE),
+                    "chrome_user_data_dir": str(CHROME_USER_DATA_DIR).replace("\\", "/")
+                }
+            })
+
+        elif path == "/api/accounts":
             accounts = load_accounts_quota()
             self.send_json({"code": 0, "data": accounts})
 
@@ -630,36 +741,62 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
             self.send_json({"code": 0, "data": accounts, "message": "全员账号已满血重置（保留禁用设置）！"})
 
         elif path == "/api/accounts/launch":
-            # 唤起对应的 Chrome 资料并打开豆包 (通过 WinSta0\Default 跨桌面调度桥梁，100% 成功激活前台窗口)
+            # 唤起对应的 Chrome 资料并打开豆包 (Win/Mac 双平台原生自适应)
             p_id = payload.get("id", "Default")
+            target_url = "https://www.doubao.com/chat/"
             try:
-                launcher_bat = Path(r"C:\Users\admin\launch_account.bat")
-                bat_code = (
-                    f'@echo off\r\n'
-                    f'start "" "{CHROME_EXE}" --profile-directory="{p_id}" "https://www.doubao.com/chat/"\r\n'
-                    f'timeout /t 1 /nobreak >nul\r\n'
-                    f'powershell -NoProfile -Command "(New-Object -ComObject WScript.Shell).AppActivate(\'Google Chrome\')"\r\n'
-                )
-                launcher_bat.write_text(bat_code, encoding="gbk")
-                
-                # 触发前台任务调度
-                subprocess.run(["schtasks", "/run", "/tn", "VG_Launch_Profile"], capture_output=True, check=False)
-                self.send_json({"code": 0, "message": f"已成功在前台唤起 Chrome [{p_id}] 窗口！"})
+                if IS_WIN:
+                    launcher_bat = Path(r"C:\Users\admin\launch_account.bat")
+                    bat_code = (
+                        f'@echo off\r\n'
+                        f'start "" "{CHROME_EXE}" --profile-directory="{p_id}" "{target_url}"\r\n'
+                        f'timeout /t 1 /nobreak >nul\r\n'
+                        f'powershell -NoProfile -Command "(New-Object -ComObject WScript.Shell).AppActivate(\'Google Chrome\')"\r\n'
+                    )
+                    launcher_bat.write_text(bat_code, encoding="gbk")
+                    subprocess.run(["schtasks", "/run", "/tn", "VG_Launch_Profile"], capture_output=True, check=False)
+                elif IS_MAC:
+                    ext_dir = str(WORKBENCH_DIR / "vg_extension")
+                    cmd = [
+                        "open", "-na", "Google Chrome", "--args",
+                        f"--profile-directory={p_id}",
+                        f"--load-extension={ext_dir}",
+                        target_url
+                    ]
+                    subprocess.Popen(cmd)
+                    # AppleScript 激活 Chrome 到最前
+                    subprocess.run(["osascript", "-e", 'tell application "Google Chrome" to activate'], check=False)
+                else:
+                    subprocess.Popen([CHROME_EXE, f"--profile-directory={p_id}", target_url])
+
+                self.send_json({"code": 0, "message": f"已成功唤起 Chrome [{p_id}] 窗口！"})
             except Exception as e:
                 self.send_json({"code": 1, "message": f"唤起 Chrome 失败: {e}"}, status=500)
 
         elif path == "/api/vg/open_folder":
-            # 在资源管理器打开指定目录
+            # 在系统文件管理器/Finder打开指定目录 (支持快捷目标与跨平台路径)
+            target_type = payload.get("type")
             target_path = payload.get("path")
-            p = Path(os.path.normpath(target_path)) if target_path else None
+            p = None
+            if target_type == "vg_root":
+                p = VG_ROOT
+            elif target_type == "extension":
+                p = WORKBENCH_DIR / "vg_extension"
+            elif target_type == "product_ref":
+                prod_name = payload.get("product")
+                if prod_name:
+                    p = VG_ROOT / prod_name / "产品参考图"
+            elif target_path:
+                p = Path(os.path.normpath(target_path))
+
             if p and p.exists():
                 try:
-                    os.startfile(str(p))
-                    self.send_json({"code": 0, "message": "已在资源管理器中打开"})
+                    open_file_or_dir(p)
+                    self.send_json({"code": 0, "message": "已在系统文件管理器中打开"})
                 except Exception as e:
                     self.send_json({"code": 1, "message": str(e)}, status=500)
             else:
-                self.send_json({"code": 1, "message": f"路径不存在: {target_path}"}, status=400)
+                self.send_json({"code": 1, "message": f"路径不存在或未找到: {p or target_path}"}, status=400)
 
         elif path == "/api/vg/read_file":
             # 读取某个文件内容
@@ -767,14 +904,27 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
             urls_arg = " ".join([f'"{u}"' for u in urls])
             
             try:
-                launcher_bat = Path(r"C:\Users\admin\launch_account.bat")
-                ext_dir = r"C:\Users\admin\DeskBox\其他\Web工作台\vg_extension"
-                bat_code = (
-                    f'@echo off\r\n'
-                    f'start "" "{CHROME_EXE}" --profile-directory="{account_id}" --load-extension="{ext_dir}" {urls_arg}\r\n'
-                )
-                launcher_bat.write_text(bat_code, encoding="gbk")
-                subprocess.run(["schtasks", "/run", "/tn", "VG_Launch_Profile"], capture_output=True, check=False)
+                ext_dir = str(WORKBENCH_DIR / "vg_extension")
+                if IS_WIN:
+                    launcher_bat = Path(r"C:\Users\admin\launch_account.bat")
+                    bat_code = (
+                        f'@echo off\r\n'
+                        f'start "" "{CHROME_EXE}" --profile-directory="{account_id}" --load-extension="{ext_dir}" {urls_arg}\r\n'
+                    )
+                    launcher_bat.write_text(bat_code, encoding="gbk")
+                    subprocess.run(["schtasks", "/run", "/tn", "VG_Launch_Profile"], capture_output=True, check=False)
+                elif IS_MAC:
+                    cmd = [
+                        "open", "-na", "Google Chrome", "--args",
+                        f"--profile-directory={account_id}",
+                        f"--load-extension={ext_dir}"
+                    ] + urls
+                    subprocess.Popen(cmd)
+                    subprocess.run(["osascript", "-e", 'tell application "Google Chrome" to activate'], check=False)
+                else:
+                    cmd = [CHROME_EXE, f"--profile-directory={account_id}", f"--load-extension={ext_dir}"] + urls
+                    subprocess.Popen(cmd)
+
                 self.send_json({"code": 0, "message": f"已成功为账号 [{account_id}] 唤起 {len(urls)} 个任务窗口！"})
             except Exception as e:
                 self.send_json({"code": 1, "message": f"唤起失败: {e}"}, status=500)
@@ -938,7 +1088,7 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
             })
 
         elif path == "/api/vg/open_material_folder":
-            # 在资源管理器中打开当前产品的 成品/素材 目录
+            # 在系统文件管理器中打开当前产品的 成品/素材 目录 (Win/Mac自适应)
             prod_name = payload.get("prod_name")
             target_dir = None
             if prod_name:
@@ -961,7 +1111,7 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
                         target_dir.mkdir(parents=True, exist_ok=True)
                         break
             if target_dir and target_dir.exists():
-                subprocess.Popen(f'explorer.exe "{str(target_dir)}"', shell=True)
+                open_file_or_dir(target_dir)
                 self.send_json({"code": 0, "message": f"已打开目录: {target_dir}"})
             else:
                 self.send_json({"code": 1, "message": "未定位到素材目录"}, status=404)

@@ -1,0 +1,34 @@
+{
+  "tasks": [
+    {
+      "id": "V01",
+      "title": "乘客视角_美式机场繁忙接送区 #1",
+      "path": "C:/Users/admin/DeskBox/其他/VG/014_Lyft指示灯/乘客视角/迁移/乘客视角_美式机场繁忙接送区.md",
+      "spec": "10s",
+      "assignedAccount": "Profile 19",
+      "sent": true,
+      "downloaded": false,
+      "edited": false
+    },
+    {
+      "id": "V02",
+      "title": "乘客视角_美式机场繁忙接送区 #2",
+      "path": "C:/Users/admin/DeskBox/其他/VG/014_Lyft指示灯/乘客视角/迁移/乘客视角_美式机场繁忙接送区.md",
+      "spec": "10s",
+      "assignedAccount": "Profile 19",
+      "sent": true,
+      "downloaded": false,
+      "edited": false
+    },
+    {
+      "id": "V03",
+      "title": "乘客视角_美式机场繁忙接送区 #3",
+      "path": "C:/Users/admin/DeskBox/其他/VG/014_Lyft指示灯/乘客视角/迁移/乘客视角_美式机场繁忙接送区.md",
+      "spec": "10s",
+      "assignedAccount": "Profile 19",
+      "sent": false,
+      "downloaded": false,
+      "edited": false
+    }
+  ]
+}
