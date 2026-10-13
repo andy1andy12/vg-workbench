@@ -34,3 +34,4 @@ fi
 # 启动服务并在后台运行或前台交互
 echo "🌐 启动本地服务: http://127.0.0.1:$PORT"
 $PYTHON_CMD server.py
+
