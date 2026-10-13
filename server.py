@@ -11,8 +11,10 @@ import re
 import json
 import subprocess
 import webbrowser
+import threading
+import time
 from pathlib import Path
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
 if sys.platform == "win32":
@@ -130,6 +132,75 @@ def ensure_launch_task():
     subprocess.run(cmd, capture_output=True, check=False)
 
 ensure_launch_task()
+
+# ----------------- 窗口切窗与事件调度 -----------------
+PENDING_SWITCHES = {}  # { task_id: { "task_id": ..., "account_id": ..., "session_url": ..., "time": ... } }
+PENDING_SWITCH_LOCK = threading.Lock()
+
+def focus_chrome_window_native(task_id, scene_title="", account_name=""):
+    """使用 Windows 原生 Win32 API 跨会话穿透置顶 Chrome 窗口"""
+    if not IS_WIN:
+        return False
+    try:
+        import ctypes
+        from ctypes import wintypes
+        user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+
+        # 挂接到当前活跃交互桌面 (WinSta0\\default)
+        hwinsta = user32.OpenWindowStationW('WinSta0', False, 0x10000000)
+        if hwinsta:
+            user32.SetProcessWindowStation(hwinsta)
+            hdesk = user32.OpenDesktopW('default', 0, False, 0x10000000)
+            if hdesk:
+                user32.SetThreadDesktop(hdesk)
+
+        WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+        matched_hwnd = None
+        fallback_hwnd = None
+
+        def enum_cb(hwnd, lparam):
+            nonlocal matched_hwnd, fallback_hwnd
+            if user32.IsWindowVisible(hwnd):
+                length = user32.GetWindowTextLengthW(hwnd)
+                if length > 0:
+                    buff = ctypes.create_unicode_buffer(length + 1)
+                    user32.GetWindowTextW(hwnd, buff, length + 1)
+                    title = buff.value
+                    if "Chrome" in title or "豆包" in title:
+                        # 1. 优先匹配包含任务指纹 [Vxx] 的标签页
+                        if task_id and f"[{task_id}]" in title:
+                            matched_hwnd = hwnd
+                            return False
+                        # 2. 匹配包含场景标题的标签页
+                        if scene_title and len(scene_title) > 2 and scene_title in title:
+                            matched_hwnd = hwnd
+                            return False
+                        # 3. 备选匹配账号名称或豆包窗口
+                        if account_name and account_name in title:
+                            if not fallback_hwnd:
+                                fallback_hwnd = hwnd
+                        elif "豆包" in title and not fallback_hwnd:
+                            fallback_hwnd = hwnd
+            return True
+
+        user32.EnumWindows(WNDENUMPROC(enum_cb), 0)
+        target = matched_hwnd or fallback_hwnd
+        if target:
+            cur_tid = kernel32.GetCurrentThreadId()
+            fg_hwnd = user32.GetForegroundWindow()
+            fg_tid = user32.GetWindowThreadProcessId(fg_hwnd, None)
+            if cur_tid != fg_tid:
+                user32.AttachThreadInput(cur_tid, fg_tid, True)
+            user32.ShowWindow(target, 9)  # SW_RESTORE
+            user32.BringWindowToTop(target)
+            user32.SetForegroundWindow(target)
+            if cur_tid != fg_tid:
+                user32.AttachThreadInput(cur_tid, fg_tid, False)
+            return True
+    except Exception as e:
+        logger.warning(f"Native window focus error: {e}")
+    return False
 
 # ----------------- 数据存取工具 -----------------
 
@@ -549,7 +620,8 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Access-Control-Request-Private-Network")
+        self.send_header("Access-Control-Allow-Private-Network", "true")
         self.end_headers()
         self.wfile.write(body)
 
@@ -557,7 +629,8 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Access-Control-Request-Private-Network")
+        self.send_header("Access-Control-Allow-Private-Network", "true")
         self.end_headers()
 
     def do_GET(self):
@@ -588,11 +661,20 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
             tasks = load_daily_tasks()
             self.send_json({"code": 0, "data": tasks})
 
+        elif path == "/api/tasks/pending_switch":
+            # 供扩展 Background 轮询待激活的任务与会话
+            now = time.time()
+            res_list = []
+            with PENDING_SWITCH_LOCK:
+                # 过滤出 30 秒内的有效切窗请求
+                expired_keys = [k for k, v in PENDING_SWITCHES.items() if now - v.get("time", 0) > 30]
+                for k in expired_keys:
+                    PENDING_SWITCHES.pop(k, None)
+                res_list = list(PENDING_SWITCHES.values())
+            self.send_json({"code": 0, "data": res_list})
+
         elif path == "/api/tampermonkey_script":
-            # 返回配合豆包使用的油猴脚本源码
-            script_path = WORKBENCH_DIR / "doubao_auto_paste.user.js"
-            code = script_path.read_text(encoding="utf-8") if script_path.exists() else "// 暂无脚本"
-            self.send_json({"code": 0, "data": code})
+            self.send_json({"code": 1, "message": "油猴脚本已弃用，请使用原生 Chrome 扩展 vg_extension！"})
 
         elif path == "/api/image":
             # 提供本地参考图二进制流，带 CORS 与 MIME 响应
@@ -960,8 +1042,82 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 self.send_json({"code": 1, "message": str(e)}, status=500)
 
+        elif path == "/api/tasks/switch_window":
+            # 瞬间激活特定任务对应的 Chrome 窗口与会话
+            task_id = payload.get("task_id", "")
+            account_id = payload.get("account_id", "")
+            tasks_data = load_daily_tasks()
+            all_tasks = tasks_data.get("tasks", [])
+            target_task = next((t for t in all_tasks if t.get("id") == task_id), None)
+            
+            session_url = ""
+            scene_title = ""
+            if target_task:
+                if not account_id:
+                    account_id = target_task.get("assignedAccount", "")
+                session_url = target_task.get("session_url", "")
+                scene_title = target_task.get("title", "")
+            
+            # 查找账号名称
+            accounts = load_accounts_quota()
+            acc_obj = next((a for a in accounts if a.get("id") == account_id), None)
+            acc_name = acc_obj.get("name", account_id) if acc_obj else account_id
+            
+            # 1. 注册切窗待办，供 Chrome 扩展 Background ServiceWorker 精准秒切 Tab 会话
+            with PENDING_SWITCH_LOCK:
+                PENDING_SWITCHES[task_id] = {
+                    "task_id": task_id,
+                    "account_id": account_id,
+                    "session_url": session_url,
+                    "time": time.time()
+                }
+
+            # 2. Windows 桌面原生穿透置顶 Chrome 窗口
+            activated = False
+            try:
+                if IS_WIN:
+                    activated = focus_chrome_window_native(task_id, scene_title, acc_name)
+                    if not activated:
+                        # 若当前所有窗口中均未找到该任务/账号，则平滑拉起该 Profile 窗口
+                        if account_id:
+                            # 关键：未绑定会话时带上 &vg_view=1，严禁触发重复自动填词/发图！
+                            target_u = session_url if session_url else (f"https://www.doubao.com/chat/?vg_task={task_id}&vg_view=1" if task_id else "https://www.doubao.com/chat/")
+                            ext_dir = str(WORKBENCH_DIR / "vg_extension")
+                            launcher_bat = Path(r"C:\Users\admin\launch_account.bat")
+                            bat_code = (
+                                f'@echo off\r\n'
+                                f'start "" "{CHROME_EXE}" --profile-directory="{account_id}" --load-extension="{ext_dir}" "{target_u}"\r\n'
+                            )
+                            launcher_bat.write_text(bat_code, encoding="gbk")
+                            subprocess.run(["schtasks", "/run", "/tn", "VG_Launch_Profile"], capture_output=True, check=False)
+                            activated = True
+                self.send_json({"code": 0, "activated": activated, "session_url": session_url, "message": f"已切至任务 [{task_id}] 对应窗口与会话！"})
+            except Exception as e:
+                self.send_json({"code": 1, "message": f"切换窗口失败: {e}"}, status=500)
+
+        elif path == "/api/tasks/pending_switch/ack":
+            task_id = payload.get("task_id", "")
+            with PENDING_SWITCH_LOCK:
+                PENDING_SWITCHES.pop(task_id, None)
+            self.send_json({"code": 0, "message": "切窗已完成回执"})
+
+        elif path == "/api/task/bind_session":
+            task_id = payload.get("task_id")
+            session_url = payload.get("session_url")
+            account_id = payload.get("account_id")
+            if task_id and session_url:
+                tasks_data = load_daily_tasks()
+                for t in tasks_data.get("tasks", []):
+                    if t.get("id") == task_id:
+                        t["session_url"] = session_url
+                        if account_id and not t.get("assignedAccount"):
+                            t["assignedAccount"] = account_id
+                        save_daily_tasks(tasks_data)
+                        break
+            self.send_json({"code": 0, "message": "会话已绑定"})
+
         elif path == "/api/task/report_video":
-            # 扩展自动上报豆包解密出的无水印视频 URL
+            # 扩展自动上报豆包解密出的无水印视频 URL (支持全局排他防重与多版本追加)
             task_id = payload.get("task_id")
             video_url = payload.get("video_url")
             account_id = payload.get("account_id")
@@ -971,42 +1127,47 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
 
             tasks_data = load_daily_tasks()
             all_tasks = tasks_data.get("tasks", [])
-            target_task = None
-            if task_id:
-                for t in all_tasks:
-                    if t.get("id") == task_id:
-                        target_task = t
-                        break
-            if not target_task and account_id:
-                # 匹配该账号名下已发送且未绑定视频的任务（倒序优先匹配最新）
-                for t in reversed(all_tasks):
-                    if t.get("assignedAccount") == account_id and t.get("sent") and not t.get("video_url"):
-                        target_task = t
-                        break
-            if not target_task:
-                # 兜底匹配全流水线中已发送且未下载的第一条无视频URL任务
-                for t in all_tasks:
-                    if t.get("sent") and not t.get("downloaded") and not t.get("video_url"):
-                        target_task = t
-                        break
+
+            # 全局排他性检查：该 URL 是否已被其他任务绑定
+            for t in all_tasks:
+                existing_urls = t.get("video_urls", [])
+                if t.get("video_url") == video_url or video_url in existing_urls:
+                    if task_id and t.get("id") != task_id:
+                        print(f"[Video Hook] 视频已归属任务 [{t.get('id')}]，拒绝错绑至 [{task_id}]")
+                        self.send_json({"code": 0, "message": f"视频已被任务 [{t.get('id')}] 绑定，忽略重复上报", "task_id": t.get("id")})
+                        return
+                    else:
+                        self.send_json({"code": 0, "message": "视频已绑定当前任务", "task_id": t.get("id")})
+                        return
+
+            if not task_id:
+                self.send_json({"code": 1, "message": "上报视频必须提供明确的 task_id，严禁模糊猜测"}, status=400)
+                return
+
+            target_task = next((t for t in all_tasks if t.get("id") == task_id), None)
 
             if target_task:
                 target_task["video_url"] = video_url
                 target_task["video_ready"] = True
-                save_daily_tasks(tasks_data)
-                print(f"[Video Hook] 成功关联任务 [{target_task['id']}] -> {video_url[:60]}...")
-                self.send_json({"code": 0, "message": "视频已成功关联任务", "task_id": target_task["id"], "video_url": video_url})
+                target_task["downloaded"] = False
+                save_daily_tasks(tasks_data, make_snapshot=True)
+                print(f"[Video Hook] 严格1对1绑定任务 [{target_task['id']}] 成片 -> {video_url[:60]}...")
+                self.send_json({
+                    "code": 0,
+                    "message": "视频已成功关联任务",
+                    "task_id": target_task["id"],
+                    "video_url": video_url
+                })
             else:
-                self.send_json({"code": 1, "message": "未找到适合关联的任务"}, status=404)
+                self.send_json({"code": 1, "message": "未找到适合关联的任务，已忽略以防错绑"}, status=404)
 
         elif path == "/api/tasks/download_videos":
-            # 批量下载已选任务的无水印成片至对应产品的【成品/素材/】目录
+            # 批量下载已选任务的无水印成片至对应产品的【成品/素材/】目录 (严格1对1单成片输出)
             task_ids = payload.get("task_ids", [])
             tasks_data = load_daily_tasks()
             all_tasks = tasks_data.get("tasks", [])
 
             if not task_ids:
-                # 若未指定，则下载所有视频就绪且未下载的任务
                 task_ids = [t["id"] for t in all_tasks if (t.get("video_url") or t.get("video_ready")) and not t.get("downloaded")]
 
             if not task_ids:
@@ -1021,12 +1182,17 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
                 if not t:
                     failed_list.append({"id": tid, "error": "任务不存在"})
                     continue
+                
+                # 严格第一性原理：1个任务ID对应唯一定位1条成片，严禁下载重复版本
                 v_url = t.get("video_url")
+                if not v_url and t.get("video_urls"):
+                    v_url = t.get("video_urls")[-1]
+
                 if not v_url:
                     failed_list.append({"id": tid, "error": "尚未捕获到无水印视频链接"})
                     continue
 
-                # 定位产品目录
+                # 定位产品目录 (0XX_产品名/成品/素材/)
                 prod_dir = None
                 if t.get("path"):
                     p = Path(os.path.normpath(t["path"]))
@@ -1044,7 +1210,6 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
                     failed_list.append({"id": tid, "error": "无法定位产品目录"})
                     continue
 
-                # 严格按照用户决策存入：成品/素材/ 目录
                 material_dir = prod_dir / "成品" / "素材"
                 material_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1052,7 +1217,20 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
                 filename = f"{t['id']}_{clean_title}.mp4"
                 dest_file = material_dir / filename
 
-                # 下载文件 (支持断点重试与防伪装 Header)
+                # 本地防重检测：如果本地已存在且大小 > 100KB，跳过网络下载
+                if dest_file.exists() and dest_file.stat().st_size > 100 * 1024:
+                    print(f"[Download] 本地已存在 {filename}，直接标记就绪跳过网络请求")
+                    t["downloaded"] = True
+                    t["local_video_path"] = str(dest_file).replace("\\", "/")
+                    downloaded_list.append({
+                        "id": t["id"],
+                        "title": t["title"],
+                        "filename": filename,
+                        "file_path": str(dest_file).replace("\\", "/"),
+                        "skipped": True
+                    })
+                    continue
+
                 try:
                     import urllib.request
                     req = urllib.request.Request(
@@ -1074,18 +1252,19 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
                     downloaded_list.append({
                         "id": t["id"],
                         "title": t["title"],
+                        "filename": filename,
                         "file_path": str(dest_file).replace("\\", "/"),
-                        "prod_dir": str(prod_dir).replace("\\", "/")
+                        "skipped": False
                     })
                 except Exception as e:
-                    failed_list.append({"id": tid, "error": f"下载网络异常: {e}"})
+                    failed_list.append({"id": tid, "filename": filename, "error": f"下载网络异常: {e}"})
 
             if downloaded_list:
-                save_daily_tasks(tasks_data)
+                save_daily_tasks(tasks_data, make_snapshot=True)
 
             self.send_json({
                 "code": 0,
-                "message": f"成功下载 {len(downloaded_list)} 条成片到【成品/素材/】！" + (f"（{len(failed_list)}条失败）" if failed_list else ""),
+                "message": f"成功入库 {len(downloaded_list)} 条成片到【成品/素材/】！" + (f"（{len(failed_list)}条失败）" if failed_list else ""),
                 "data": {
                     "downloaded": downloaded_list,
                     "failed": failed_list
@@ -1126,7 +1305,7 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
 
 def run():
     server_address = ("", PORT)
-    httpd = HTTPServer(server_address, WorkbenchHandler)
+    httpd = ThreadingHTTPServer(server_address, WorkbenchHandler)
     url = f"http://127.0.0.1:{PORT}"
     print(f"==================================================")
     print(f"🚀 VG 视频生产与账号矩阵 Web 工作台已启动！")

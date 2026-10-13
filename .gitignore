@@ -13,6 +13,7 @@ Desktop.ini
 scratch/
 *.log
 *.tmp
+*.zip
 
 # Sensitive User Data / Cookies
 data/doubao_cookies_export/

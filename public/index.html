@@ -78,8 +78,14 @@
     .form-control { width: 100%; background: #0f172a; border: 1px solid var(--card-border); border-radius: 6px; padding: 8px 12px; color: #fff; font-size: 13px; outline: none; }
     .form-control:focus { border-color: var(--primary); }
 
-    .kanban-list { display: flex; flex-direction: column; gap: 12px; }
-    .kanban-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 8px; padding: 12px 16px; display: grid; grid-template-columns: 28px 65px 1.3fr auto 165px 210px 85px; align-items: center; gap: 10px; transition: all 0.2s; }
+    .kanban-list { display: flex; flex-direction: column; gap: 10px; }
+    .pipeline-sticky-header { position: sticky; top: 0; z-index: 50; background: var(--bg); padding-bottom: 8px; }
+    .pipeline-scroll-area { max-height: calc(100vh - 275px); min-height: 400px; overflow-y: auto; padding-right: 6px; }
+    .pipeline-scroll-area::-webkit-scrollbar { width: 6px; }
+    .pipeline-scroll-area::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    .pipeline-scroll-area::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+    .kanban-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 8px; padding: 12px 16px; display: grid; grid-template-columns: 28px 65px 1.4fr auto 165px 135px 36px; align-items: center; gap: 10px; transition: all 0.2s; }
     .kanban-card:hover { border-color: #3b82f6; }
     .kanban-card.selected { border-color: #3b82f6; background: rgba(37, 99, 235, 0.12); box-shadow: 0 0 0 1px #3b82f660; }
     .task-select-cb { width: 17px; height: 17px; accent-color: #2563eb; cursor: pointer; }
@@ -89,10 +95,13 @@
     .kanban-id { font-size: 15px; font-weight: 800; color: #60a5fa; }
     .kanban-title { font-size: 14px; font-weight: 600; color: #fff; }
     .kanban-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-    
-    .check-steps { display: flex; gap: 10px; font-size: 12px; }
-    .step-item { display: flex; align-items: center; gap: 4px; cursor: pointer; color: var(--text-muted); }
-    .step-item input { accent-color: var(--primary); }
+
+    /* 自动化状态胶囊徽标 */
+    .badge-status-pill { font-size: 11px; padding: 3px 8px; border-radius: 4px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 4px; white-space: nowrap; }
+    .badge-status-pill.badge-saved { background: #10b98125; color: #34d399; border: 1px solid #10b98150; }
+    .badge-status-pill.badge-ready { background: #8b5cf625; color: #c084fc; border: 1px solid #8b5cf650; }
+    .badge-status-pill.badge-sent { background: #3b82f625; color: #60a5fa; border: 1px solid #3b82f650; }
+    .badge-status-pill.badge-waiting { background: #33415540; color: #94a3b8; border: 1px solid #47556940; }
 
     /* 流水线精细化管理工具栏 */
     .pipeline-toolbar { background: #131b2e; border: 1px solid var(--card-border); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
@@ -187,10 +196,10 @@
 
   <!-- 选项卡切换 -->
   <div class="nav-tabs">
-    <button class="tab-btn active" id="tab-btn-matrix" onclick="switchTab('matrix')">⚡ 账号算力矩阵</button>
-    <button class="tab-btn" onclick="switchTab('kanban')">📋 每日制作流水线</button>
-    <button class="tab-btn" onclick="switchTab('scaffold')">🏗️ 资产规范脚手架</button>
-    <button class="tab-btn" onclick="switchTab('plugin')">🔌 豆包一键填词助手</button>
+    <button class="tab-btn active" id="tab-btn-matrix" onclick="switchTab('matrix', this)">⚡ 账号算力矩阵</button>
+    <button class="tab-btn" id="tab-btn-kanban" onclick="switchTab('kanban', this)">📋 每日制作流水线</button>
+    <button class="tab-btn" id="tab-btn-scaffold" onclick="switchTab('scaffold', this)">🏗️ 资产规范脚手架</button>
+    <button class="tab-btn" id="tab-btn-plugin" onclick="switchTab('plugin', this)">🔌 豆包一键填词助手</button>
   </div>
 
   <main>
@@ -225,135 +234,89 @@
       </div>
     </div>
 
-    <!-- 选项卡 2：每日制作流水线 -->
+    <!-- 选项卡 2：每日制作流水线 (第一性原理极简纯净版) -->
     <div id="tab-kanban" class="tab-content">
-      <!-- 流水线主操作栏 (支持在文件夹中多选 3-5 个提示词) -->
-      <div style="background: linear-gradient(135deg, #1e293b, #0f172a); border: 1px solid var(--card-border); border-radius: 10px; padding: 14px 20px; margin-bottom: 14px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 14px; box-shadow: 0 4px 16px rgba(0,0,0,0.3);">
-        <div style="display: flex; align-items: center; gap: 14px;">
-          <div style="font-size: 26px;">🎬</div>
-          <div>
-            <div style="font-size: 15px; font-weight: 700; color: #fff;">自选生产排产流水线</div>
-            <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;" id="pipeline-status-desc">
-              点击右侧大按钮，可在任意产品/脚本文件夹中自由勾选 3-5 个提示词批量追加进生产队列
-            </div>
+      <!-- 顶部固定操作栏 (吸顶固定，滚轮浏览任务时永远驻留顶部) -->
+      <div class="pipeline-sticky-header">
+        <!-- 主调度控制条 -->
+        <div style="background: linear-gradient(135deg, #1e293b, #0f172a); border: 1px solid var(--card-border); border-radius: 8px; padding: 10px 16px; margin-bottom: 8px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; box-shadow: 0 4px 14px rgba(0,0,0,0.3);">
+          <!-- 左侧：生产核心动作 -->
+          <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <button class="btn btn-primary" onclick="openTaskPickerDrawer()" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); border: none; font-weight: 700; height: 36px; padding: 0 16px; font-size: 13px; box-shadow: 0 4px 12px rgba(99,102,241,0.35);">
+              📁 挑选添加任务
+            </button>
+            <button class="btn btn-primary" onclick="autoAssignAccountsSmart()" style="background: linear-gradient(135deg, #3b82f6, #2563eb); border: none; font-weight: 700; height: 36px; padding: 0 14px; font-size: 13px;" title="按算力池 26 账号今日剩余额度自动均匀分配">
+              ⚡ 智能分配账号
+            </button>
+            <button class="btn btn-primary" id="btn-launch-selected" onclick="launchSelectedTasks()" style="background: linear-gradient(135deg, #2563eb, #10b981); border: none; font-weight: 700; height: 36px; padding: 0 16px; font-size: 13px; box-shadow: 0 4px 12px rgba(37,99,235,0.35);">
+              🚀 一键唤起已选 (<span id="selected-tasks-count">0</span>条)
+            </button>
+            <button class="btn btn-primary" id="btn-download-selected" onclick="downloadSelectedVideos()" style="background: linear-gradient(135deg, #059669, #10b981); border: none; font-weight: 700; height: 36px; padding: 0 16px; font-size: 13px; box-shadow: 0 4px 12px rgba(16,185,129,0.35);" title="一键将勾选且已捕获无水印视频的任务下载到【成品/素材/】目录">
+              📥 一键下载已选 (<span id="selected-download-count">0</span>条)
+            </button>
+            <button class="btn btn-outline" onclick="openProductMaterialFolderDirect()" style="font-size: 12px; height: 36px; color: #6ee7b7; border-color: #10b98150;" title="在资源管理器中打开当前产品的【成品/素材/】目录">
+              📁 打开素材目录
+            </button>
           </div>
-        </div>
-        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-          <button class="btn btn-primary" onclick="openTaskPickerDrawer()" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); border: none; font-weight: 700; height: 38px; padding: 0 20px; font-size: 13px; box-shadow: 0 4px 14px rgba(99,102,241,0.35);">
-            📁 从资产目录勾选添加任务
-          </button>
-          <button class="btn btn-outline" onclick="openCurrentProductRefFolderDirect()" style="height: 38px; padding: 0 14px; font-size: 12px;" title="查看产品参考图目录">
-            🖼️ 打开产品参考图
-          </button>
-          <button class="btn btn-outline" onclick="batchClearAllTasks()" style="height: 38px; padding: 0 12px; font-size: 12px; color: #94a3b8;" title="清空流水线所有任务">
-            🗑️ 清空列表
-          </button>
-        </div>
-      </div>
 
-      <!-- 批量并发调度控制栏 (限并发5条保护电脑性能) -->
-      <div style="background: rgba(30, 41, 59, 0.85); border: 1px solid #3b82f6; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.25);">
-        <div style="display: flex; align-items: center; gap: 10px;">
-          <span style="font-size: 14px; font-weight: bold; color: #60a5fa;">⚡ 生产调度控制器</span>
-          <span style="font-size: 12px; color: #94a3b8;">(按您的电脑性能保护限制：每次并发最多 5 条窗口平滑唤起)</span>
-        </div>
-        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-          <button class="btn btn-outline" onclick="openExtensionFolder()" style="border-color: #38bdf8; color: #38bdf8; font-size: 12px; height: 36px; display: inline-flex; align-items: center; gap: 4px; padding: 0 12px;" title="打开原生插件目录，拖入 chrome://extensions 即可永久使用">
-            🧩 原生扩展插件 (打开目录一键安装)
-          </button>
-          <button class="btn btn-primary" id="btn-launch-selected" onclick="launchSelectedTasks()" style="background: linear-gradient(135deg, #2563eb, #10b981); border: none; font-weight: 700; height: 36px; padding: 0 16px; box-shadow: 0 4px 14px rgba(37,99,235,0.35);">
-            🚀 一键唤起已选任务 (<span id="selected-tasks-count">0</span>条)
-          </button>
-          <button class="btn btn-primary" id="btn-download-selected" onclick="downloadSelectedVideos()" style="background: linear-gradient(135deg, #059669, #10b981); border: none; font-weight: 700; height: 36px; padding: 0 16px; box-shadow: 0 4px 14px rgba(16,185,129,0.35);" title="一键将勾选且已捕获无水印视频的任务下载到【成品/素材/】目录">
-            📥 一键下载已选视频 (<span id="selected-download-count">0</span>条)
-          </button>
-          <button class="btn btn-outline" onclick="openProductMaterialFolderDirect()" style="font-size: 12px; height: 36px; color: #6ee7b7; border-color: #10b98150;" title="在资源管理器中打开当前产品的【成品/素材/】目录">
-            📁 打开素材目录
-          </button>
-          <button class="btn btn-outline" onclick="launchBatchNext5()" style="font-size: 12px; height: 36px; color: #cbd5e1;" title="按列表顺序启动前5条待发任务">
-            ⚡ 启动待发前5条
-          </button>
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <select id="select-same-account" class="form-control" style="width: 170px; font-size: 12px; height: 36px;">
-              <option value="">按账号打开任务...</option>
-            </select>
-            <button class="btn btn-outline btn-sm" onclick="launchSameAccountTasks()" style="height: 36px; padding: 0 12px;">
-              🚀 打开此号任务
+          <!-- 右侧：资产目录与快照管理 -->
+          <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <button class="btn btn-outline btn-sm" onclick="openCurrentProductRefFolderDirect()" style="height: 34px; padding: 0 10px; font-size: 12px;" title="查看产品参考图目录">
+              🖼️ 打开参考图
+            </button>
+            <button class="btn btn-outline btn-sm" onclick="openSnapshotsModal()" style="height: 34px; padding: 0 10px; font-size: 12px;" title="查看历史自动按日快照并支持一键回滚">
+              📅 历史快照
+            </button>
+            <button class="btn btn-outline btn-sm" onclick="batchClearAllTasks()" style="height: 34px; padding: 0 10px; font-size: 12px; color: #f87171; border-color: #ef444450;" title="清空流水线所有任务">
+              🗑️ 清空列表
             </button>
           </div>
         </div>
-      </div>
 
-      <!-- 流水线精细化管理工具栏 -->
-      <div class="pipeline-toolbar">
-        <!-- 左侧：状态筛选 Tab -->
-        <div class="filter-tabs">
-          <button class="filter-tab active" id="tab-filter-all" onclick="setTaskFilter('all')">
-            全部 <span class="badge" id="badge-all">0</span>
-          </button>
-          <button class="filter-tab" id="tab-filter-waiting_sent" onclick="setTaskFilter('waiting_sent')">
-            待发送 <span class="badge" id="badge-waiting_sent">0</span>
-          </button>
-          <button class="filter-tab" id="tab-filter-waiting_edit" onclick="setTaskFilter('waiting_edit')">
-            待剪辑 <span class="badge" id="badge-waiting_edit">0</span>
-          </button>
-          <button class="filter-tab" id="tab-filter-finished" onclick="setTaskFilter('finished')">
-            已出成片 <span class="badge" id="badge-finished">0</span>
-          </button>
+        <!-- 状态筛选与生产进度条 -->
+        <div style="background: #131b2e; border: 1px solid var(--card-border); border-radius: 8px; padding: 8px 14px; margin-bottom: 8px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px;">
+          <div class="filter-tabs">
+            <button class="filter-tab active" id="tab-filter-all" onclick="setTaskFilter('all')">
+              全部 <span class="badge" id="badge-all">0</span>
+            </button>
+            <button class="filter-tab" id="tab-filter-waiting_sent" onclick="setTaskFilter('waiting_sent')">
+              待发送 <span class="badge" id="badge-waiting_sent">0</span>
+            </button>
+            <button class="filter-tab" id="tab-filter-ready_video" onclick="setTaskFilter('ready_video')">
+              🎬 视频就绪 (可下载) <span class="badge" id="badge-ready_video">0</span>
+            </button>
+            <button class="filter-tab" id="tab-filter-downloaded" onclick="setTaskFilter('downloaded')">
+              💾 素材已入库 <span class="badge" id="badge-downloaded">0</span>
+            </button>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <span style="font-size: 12px; font-weight: 600; color: #cbd5e1;" id="kanban-progress-label">素材入库进度: 0 / 0 (0%)</span>
+            <div style="width: 140px; height: 6px; background: #334155; border-radius: 3px; overflow: hidden;">
+              <div class="progress-bar-fill" id="kanban-progress-fill" style="width: 0%; height: 100%; background: linear-gradient(90deg, #3b82f6, #10b981); transition: width 0.3s;"></div>
+            </div>
+          </div>
         </div>
 
-        <!-- 右侧：管理操作按钮组 -->
-        <div class="toolbar-actions">
-          <button class="btn btn-primary btn-sm" onclick="autoAssignAccountsSmart()" style="background: linear-gradient(135deg, #3b82f6, #8b5cf6); border: none; font-weight: 600; padding: 6px 12px;" title="按算力池账号今日剩余额度自动均匀分配给未分配任务">
-            ⚡ 智能分配账号
-          </button>
-          <button class="btn btn-outline btn-sm" onclick="openTaskPickerDrawer()" title="从当前产品中挑选变体脚本追加到流水线">
-            ➕ 新增任务
-          </button>
-          <button class="btn btn-outline btn-sm" onclick="openSnapshotsModal()" title="查看历史自动按日快照并支持一键回滚">
-            📅 历史快照
-          </button>
-          
-          <!-- 批量操作下拉 -->
-          <div style="position: relative; display: inline-block;">
-            <button class="btn btn-outline btn-sm" onclick="toggleBatchDropdown(event)">
-              🧹 批量操作 ▾
-            </button>
-            <div class="dropdown-menu" id="batch-dropdown">
-              <div class="dropdown-item" onclick="batchCleanFinished()">🧹 清理已出成片任务</div>
-              <div class="dropdown-item" onclick="batchClearAccountAssignments()">🔄 一键清空账号分配</div>
-              <div class="dropdown-item" onclick="batchResetTaskStatus()">↩️ 一键重置执行状态</div>
-              <div style="height: 1px; background: #334155; margin: 4px 0;"></div>
-              <div class="dropdown-item" style="color: #f87171;" onclick="batchClearAllTasks()">🗑️ 清空流水线所有任务</div>
-            </div>
+        <!-- 任务多选控制栏 -->
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 14px; font-size: 12px; color: var(--text-muted); background: #0b1120; border-radius: 6px; border: 1px solid var(--card-border);">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <input type="checkbox" id="select-all-kanban-cb" onchange="toggleSelectAllVisibleTasks(this.checked)" style="width: 16px; height: 16px; accent-color: #2563eb; cursor: pointer;">
+            <label for="select-all-kanban-cb" style="cursor: pointer; user-select: none; font-weight: 600; color: #cbd5e1;">全选当前视图</label>
+            <span id="selected-tasks-tip" style="color: #60a5fa; font-weight: 600; margin-left: 6px;">(已勾选 0 条)</span>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-outline btn-sm" onclick="selectOnlyWaitingSentTasks()" style="padding: 2px 10px; font-size: 11px;">勾选全部【待发送】</button>
+            <button class="btn btn-outline btn-sm" onclick="clearSelectedTasks()" style="padding: 2px 10px; font-size: 11px;">取消勾选</button>
           </div>
         </div>
       </div>
 
-      <!-- 进度条 -->
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-        <span style="font-size: 13px; font-weight: 600;" id="kanban-progress-label">今日生产进度: 0 / 15 (0%)</span>
-      </div>
-      <div class="progress-bar-container">
-        <div class="progress-bar-fill" id="kanban-progress-fill"></div>
-      </div>
-
-      <!-- 任务勾选快捷栏 -->
-      <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 14px; font-size: 12px; color: var(--text-muted); background: #0b1120; border-radius: 6px; margin-bottom: 12px; border: 1px solid var(--card-border);">
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <input type="checkbox" id="select-all-kanban-cb" onchange="toggleSelectAllVisibleTasks(this.checked)" style="width: 16px; height: 16px; accent-color: #2563eb; cursor: pointer;">
-          <label for="select-all-kanban-cb" style="cursor: pointer; user-select: none; font-weight: 600; color: #cbd5e1;">全选当前视图</label>
-          <span id="selected-tasks-tip" style="color: #60a5fa; font-weight: 600; margin-left: 6px;">(已勾选 0 条)</span>
+      <!-- 任务流转列表 (独立滚轮滚动区) -->
+      <div class="pipeline-scroll-area">
+        <div class="kanban-list" id="kanban-list">
+          <!-- 任务条目动态插入 -->
         </div>
-        <div style="display: flex; gap: 8px;">
-          <button class="btn btn-outline btn-sm" onclick="selectOnlyWaitingSentTasks()" style="padding: 2px 10px; font-size: 11px;">勾选全部【待发送】</button>
-          <button class="btn btn-outline btn-sm" onclick="clearSelectedTasks()" style="padding: 2px 10px; font-size: 11px;">取消勾选</button>
-        </div>
-      </div>
-
-      <!-- 任务流转列表 -->
-      <div class="kanban-list" id="kanban-list">
-        <!-- 任务条目动态插入 -->
       </div>
     </div>
 
@@ -405,17 +368,25 @@
       </div>
     </div>
 
-    <!-- 选项卡 4：豆包插件助手 -->
+    <!-- 选项卡 4：原生插件助手 -->
     <div id="tab-plugin" class="tab-content">
       <div class="stat-card" style="max-width: 900px; margin: 0 auto;">
-        <h3 style="font-size: 16px; margin-bottom: 10px; color: #60a5fa;">🔌 豆包一键填词与额度同步油猴脚本</h3>
+        <h3 style="font-size: 16px; margin-bottom: 10px; color: #60a5fa;">🧩 VG 豆包全自动生产与无水印下载原生扩展 (vg_extension)</h3>
         <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px; line-height: 1.6;">
-          安装本脚本后，只要你在任意 Chrome 资料窗口中打开豆包（<code>https://www.doubao.com/chat/</code>），页面右下角会自动悬浮 <b>[📥 粘贴工作台提示词]</b> 按钮，点击即可直接将工作台复制的提示词无感塞入聊天框！
+          本工作台采用原生 Chrome 扩展（Manifest V3），彻底免去油猴脚本权限弹窗与同步困扰。扩展已内置在工作台的 <code>vg_extension/</code> 源码目录中。
         </p>
-        <div style="margin-bottom: 14px;">
-          <button class="btn btn-primary btn-sm" onclick="copyTampermonkeyCode()">📋 一键复制油猴脚本代码</button>
+        <div style="background: #0b1120; border: 1px solid var(--card-border); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+          <h4 style="font-size: 14px; color: #fff; margin-bottom: 8px;">🚀 安装与更新说明 (仅需首次配置一次)：</h4>
+          <ol style="font-size: 13px; color: #cbd5e1; padding-left: 20px; line-height: 1.8;">
+            <li>在 Chrome 浏览器中访问 <code>chrome://extensions</code>；</li>
+            <li>开启右上角【开发者模式】开关；</li>
+            <li>点击左上角【加载已解压的扩展程序】，选择下方的插件文件夹；</li>
+            <li>后续如扩展更新，只需在扩展管理页点击卡片上的 🔄 刷新图标并在豆包网页按 F5 即可。</li>
+          </ol>
         </div>
-        <textarea id="tampermonkey-code" class="form-control" style="height: 320px; font-family: monospace; font-size: 12px;" readonly></textarea>
+        <button class="btn btn-primary" onclick="openExtensionFolder()" style="background: linear-gradient(135deg, #2563eb, #10b981); border: none; font-weight: 700; height: 38px; padding: 0 18px;">
+          📁 一键打开原生插件源码目录 (vg_extension)
+        </button>
       </div>
     </div>
   </main>
@@ -560,18 +531,19 @@
       setTimeout(() => { toast.style.display = 'none'; }, 2500);
     }
 
-    function switchTab(tabId) {
+    function switchTab(tabId, el) {
       document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
       document.querySelectorAll('.tab-content').forEach(ct => ct.classList.remove('active'));
-      event.target.classList.add('active');
-      document.getElementById('tab-' + tabId).classList.add('active');
+      const targetBtn = el || (window.event ? (window.event.currentTarget || window.event.target.closest('.tab-btn')) : null) || document.getElementById(`tab-btn-${tabId}`);
+      if (targetBtn) targetBtn.classList.add('active');
+      const targetContent = document.getElementById('tab-' + tabId);
+      if (targetContent) targetContent.classList.add('active');
     }
 
     async function refreshAll() {
       await loadAccounts();
       await loadVGTree();
       await loadTasks();
-      await loadTampermonkeyScript();
       startTaskPolling();
     }
 
@@ -1068,6 +1040,21 @@
       }
     }
 
+    // 保证生成全局严格唯一的任务ID (如 V01, V02，绝不与已有任务冲突)
+    function generateUniqueTaskId() {
+      const existingNums = new Set(
+        currentTasks.map(t => {
+          const m = t.id && t.id.match(/^V(\d+)$/);
+          return m ? parseInt(m[1], 10) : 0;
+        })
+      );
+      let next = 1;
+      while (existingNums.has(next)) {
+        next++;
+      }
+      return `V${String(next).padStart(2, '0')}`;
+    }
+
     // 纯追加模式提交任务（支持各提示词按设定次数拆分为独立任务）
     function submitTaskPicker() {
       if (pickerSelectedFiles.size === 0) {
@@ -1081,10 +1068,10 @@
       addedList.forEach(item => {
         const repeats = Math.max(1, parseInt(item.repeatCount || 1, 10));
         for (let r = 1; r <= repeats; r++) {
-          const nextNum = currentTasks.length + 1;
+          const uniqueId = generateUniqueTaskId();
           const taskTitle = repeats > 1 ? `${item.title} #${r}` : item.title;
           currentTasks.push({
-            id: `V${String(nextNum).padStart(2, '0')}`,
+            id: uniqueId,
             title: taskTitle,
             path: item.path,
             spec: item.spec || '10s',
@@ -1203,25 +1190,65 @@
       saveTasksState();
     }
 
+    // 一键精准秒切置顶任务所在的 Chrome 窗口
+    async function switchTaskWindow(taskId, accountId) {
+      showToast(`🎯 正在切至任务 [${taskId}] 窗口...`);
+      try {
+        const res = await fetch('/api/tasks/switch_window', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ task_id: taskId, account_id: accountId })
+        });
+        const json = await res.json();
+        if (json.code === 0) {
+          showToast(`🎯 已切至任务 [${taskId}] 窗口！`);
+        } else {
+          showToast(`切窗提示: ${json.message}`);
+        }
+      } catch (e) {
+        showToast(`切窗异常: ${e}`);
+      }
+    }
+
     let currentTaskFilter = 'all';
 
     function setTaskFilter(filterType) {
       currentTaskFilter = filterType;
-      ['all', 'waiting_sent', 'waiting_edit', 'finished'].forEach(ft => {
+      ['all', 'waiting_sent', 'ready_video', 'downloaded'].forEach(ft => {
         const btn = document.getElementById(`tab-filter-${ft}`);
         if (btn) btn.classList.toggle('active', ft === filterType);
       });
+
+      // 切换视图时净化已选任务：仅保留在当前视图中可见的任务，彻底杜绝隐藏视图幽灵勾选残留！
+      const visibleIds = new Set(getVisibleFilteredTasks().map(t => t.id));
+      for (const id of Array.from(selectedTaskIds)) {
+        if (!visibleIds.has(id)) {
+          selectedTaskIds.delete(id);
+        }
+      }
+
       renderKanban();
     }
 
     // ================= 看板任务勾选与批量管理 =================
     let selectedTaskIds = new Set();
 
+    // 动态净化孤儿 ID，保证 selectedTaskIds 严格只包含当前流水线真实存在的任务
+    function sanitizeSelectedTaskIds() {
+      const existing = new Set(currentTasks.map(t => t.id));
+      for (const id of Array.from(selectedTaskIds)) {
+        if (!existing.has(id)) {
+          selectedTaskIds.delete(id);
+        }
+      }
+      return selectedTaskIds;
+    }
+
     function getVisibleFilteredTasks() {
       return currentTasks.filter(task => {
         if (currentTaskFilter === 'waiting_sent') return !task.sent;
-        if (currentTaskFilter === 'waiting_edit') return task.sent && !task.edited;
-        if (currentTaskFilter === 'finished') return task.edited;
+        if (currentTaskFilter === 'ready_video') return (task.video_url || task.video_ready) && !task.downloaded;
+        if (currentTaskFilter === 'downloaded') return task.downloaded;
         return true;
       });
     }
@@ -1238,6 +1265,10 @@
     function toggleSelectAllVisibleTasks(checked) {
       const visible = getVisibleFilteredTasks();
       if (checked) {
+        // 如果在特定分类下（如“待发送”），先清除不可见任务，保证全选只选中当前分类可见条目
+        if (currentTaskFilter !== 'all') {
+          selectedTaskIds.clear();
+        }
         visible.forEach(t => selectedTaskIds.add(t.id));
       } else {
         visible.forEach(t => selectedTaskIds.delete(t.id));
@@ -1246,11 +1277,12 @@
     }
 
     function selectOnlyWaitingSentTasks() {
+      selectedTaskIds.clear(); // 关键红线：先彻底清空历史残留，绝不跨分类累加！
       currentTasks.forEach(t => {
         if (!t.sent) selectedTaskIds.add(t.id);
       });
       updateSelectedTasksUI();
-      showToast(`已勾选全部待发送任务 (${selectedTaskIds.size} 条)`);
+      showToast(`已仅勾选全部待发送任务 (${selectedTaskIds.size} 条)`);
     }
 
     function clearSelectedTasks() {
@@ -1260,6 +1292,8 @@
     }
 
     function updateSelectedTasksUI() {
+      sanitizeSelectedTaskIds();
+
       document.querySelectorAll('.kanban-card').forEach(card => {
         const id = card.dataset.taskId;
         const isSelected = selectedTaskIds.has(id);
@@ -1268,17 +1302,20 @@
         if (cb) cb.checked = isSelected;
       });
 
-      const count = selectedTaskIds.size;
+      // 1. 统计勾选任务中真正【待发送】(可唤起) 的任务数量
+      const waitingToLaunch = currentTasks.filter(t => selectedTaskIds.has(t.id) && !t.sent);
       const countEl = document.getElementById('selected-tasks-count');
-      if (countEl) countEl.innerText = count;
+      if (countEl) countEl.innerText = waitingToLaunch.length;
 
-      const tipEl = document.getElementById('selected-tasks-tip');
-      if (tipEl) tipEl.innerText = `(已勾选 ${count} 条)`;
-
-      // 统计已勾选且视频已就绪（可下载）的任务数量
+      // 2. 统计勾选任务中视频已就绪 (可下载) 的任务数量
       const readyToDl = currentTasks.filter(t => selectedTaskIds.has(t.id) && (t.video_url || t.video_ready));
       const dlCountEl = document.getElementById('selected-download-count');
       if (dlCountEl) dlCountEl.innerText = readyToDl.length;
+
+      // 3. 统计总勾选任务数
+      const totalSelected = selectedTaskIds.size;
+      const tipEl = document.getElementById('selected-tasks-tip');
+      if (tipEl) tipEl.innerText = `(已勾选 ${totalSelected} 条)`;
 
       const allCb = document.getElementById('select-all-kanban-cb');
       if (allCb) {
@@ -1288,7 +1325,7 @@
 
       const launchBtn = document.getElementById('btn-launch-selected');
       if (launchBtn) {
-        launchBtn.style.opacity = count > 0 ? '1' : '0.85';
+        launchBtn.style.opacity = waitingToLaunch.length > 0 ? '1' : '0.75';
       }
       const dlBtn = document.getElementById('btn-download-selected');
       if (dlBtn) {
@@ -1298,39 +1335,40 @@
 
     function renderKanban() {
       const list = document.getElementById('kanban-list');
+      if (!list) return;
       list.innerHTML = '';
-      
-      let doneCount = 0;
-      let countWaitingSent = 0;
-      let countWaitingEdit = 0;
-      let countFinished = 0;
 
-      currentTasks.forEach(task => {
-        if (task.edited) {
-          countFinished++;
-          doneCount++;
-        } else if (task.sent && !task.edited) {
-          countWaitingEdit++;
-        } else if (!task.sent) {
+      let countWaitingSent = 0;
+      let countReadyVideo = 0;
+      let countDownloaded = 0;
+
+      currentTasks.forEach(t => {
+        if (!t.sent) {
           countWaitingSent++;
+        }
+        if ((t.video_url || t.video_ready) && !t.downloaded) {
+          countReadyVideo++;
+        }
+        if (t.downloaded) {
+          countDownloaded++;
         }
       });
 
       // 更新徽标
       const bAll = document.getElementById('badge-all');
       const bSent = document.getElementById('badge-waiting_sent');
-      const bEdit = document.getElementById('badge-waiting_edit');
-      const bFin = document.getElementById('badge-finished');
+      const bReady = document.getElementById('badge-ready_video');
+      const bDl = document.getElementById('badge-downloaded');
       if (bAll) bAll.innerText = currentTasks.length;
       if (bSent) bSent.innerText = countWaitingSent;
-      if (bEdit) bEdit.innerText = countWaitingEdit;
-      if (bFin) bFin.innerText = countFinished;
+      if (bReady) bReady.innerText = countReadyVideo;
+      if (bDl) bDl.innerText = countDownloaded;
 
       // 根据筛选器过滤
       const filteredTasksWithIdx = currentTasks.map((t, idx) => ({ task: t, origIdx: idx })).filter(item => {
         if (currentTaskFilter === 'waiting_sent') return !item.task.sent;
-        if (currentTaskFilter === 'waiting_edit') return item.task.sent && !item.task.edited;
-        if (currentTaskFilter === 'finished') return item.task.edited;
+        if (currentTaskFilter === 'ready_video') return (item.task.video_url || item.task.video_ready) && !item.task.downloaded;
+        if (currentTaskFilter === 'downloaded') return item.task.downloaded;
         return true;
       });
 
@@ -1338,8 +1376,8 @@
         list.innerHTML = `
           <div style="background: var(--card-bg); border: 1px dashed var(--card-border); border-radius: 8px; padding: 40px; text-align: center; color: var(--text-muted);">
             <div style="font-size: 28px; margin-bottom: 10px;">📋</div>
-            <div style="font-size: 14px;">当前筛选分类下暂无任务</div>
-            <div style="font-size: 12px; margin-top: 4px;">可在上方点击【全部】查看，或点击【➕ 新增任务】添加场景</div>
+            <div style="font-size: 14px;">当前分类下暂无任务</div>
+            <div style="font-size: 12px; margin-top: 4px;">可在上方点击【全部】查看，或点击【📁 挑选添加任务】</div>
           </div>
         `;
       } else {
@@ -1378,13 +1416,17 @@
             specBadgeBorder = '#f59e0b40';
           }
 
-          // 视频就绪/已下载徽标
-          let videoStatusBadge = '';
+          // 自动化全流程状态胶囊徽标 (彻底替代手动复选框)
+          let autoStatusBadge = '';
           const hasVideoUrl = !!(task.video_url || task.video_ready);
           if (task.downloaded) {
-            videoStatusBadge = '<span class="badge-video badge-video-saved" title="无水印视频已下载入库【成品/素材/】">💾 素材已入库</span>';
+            autoStatusBadge = '<span class="badge-status-pill badge-saved" title="无水印成片已下载入库【成品/素材/】">💾 素材已入库</span>';
           } else if (hasVideoUrl) {
-            videoStatusBadge = '<span class="badge-video badge-video-ready" title="扩展已自动捕获无水印视频直链，可一键下载">🎬 视频就绪</span>';
+            autoStatusBadge = '<span class="badge-status-pill badge-ready" title="扩展已捕获无水印直链，可一键下载">🎬 视频就绪</span>';
+          } else if (task.sent) {
+            autoStatusBadge = '<span class="badge-status-pill badge-sent" title="已成功自动注词注图，豆包正在生成中">🔵 豆包生成中</span>';
+          } else {
+            autoStatusBadge = '<span class="badge-status-pill badge-waiting" title="等待唤起或手动导入">⚪ 待发送</span>';
           }
 
           // 视频操作按钮（预览 / 下载）
@@ -1396,38 +1438,48 @@
             `;
           }
 
+          card.onclick = (e) => {
+            if (e.target.closest('button, select, a, input')) return;
+            const isNowChecked = !selectedTaskIds.has(task.id);
+            toggleSelectTask(task.id, isNowChecked);
+          };
+
           card.innerHTML = `
             <div style="display: flex; align-items: center; justify-content: center;">
-              <input type="checkbox" class="task-select-cb" ${isTaskSelected ? 'checked' : ''} onchange="toggleSelectTask('${task.id}', this.checked)" title="勾选以批量唤起或下载此任务">
+              <input type="checkbox" class="task-select-cb" ${isTaskSelected ? 'checked' : ''} onchange="toggleSelectTask('${task.id}', this.checked)" onclick="event.stopPropagation()" title="勾选以批量唤起或下载此任务">
             </div>
             <div class="kanban-id">${task.id}</div>
             <div>
               <div class="kanban-title" style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                 <span>${task.title}</span>
                 <span style="font-size: 10px; padding: 1px 5px; border-radius: 4px; background: ${specBadgeBg}; color: ${specBadgeColor}; border: 1px solid ${specBadgeBorder}; font-weight: 600;">${specText}</span>
-                ${videoStatusBadge}
               </div>
-              <div class="kanban-sub">${task.path ? '已关联本地文件' : '待生成'}</div>
+              <div class="kanban-sub">${task.path ? '已关联本地提示词' : '待生成'}</div>
+              <div class="card-dl-progress" id="dl-progress-${task.id}" style="display: none; margin-top: 6px; background: rgba(15,23,42,0.9); border-radius: 4px; padding: 4px 8px; border: 1px solid #3b82f640;">
+                <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;">
+                  <span style="color: #60a5fa;" id="dl-status-text-${task.id}">⏳ 正在准备下载...</span>
+                  <span style="color: #34d399; font-weight: 700;" id="dl-pct-text-${task.id}">0%</span>
+                </div>
+                <div style="height: 4px; background: #1e293b; border-radius: 2px; overflow: hidden;">
+                  <div id="dl-bar-${task.id}" style="width: 0%; height: 100%; background: linear-gradient(90deg, #3b82f6, #10b981); transition: width 0.15s ease;"></div>
+                </div>
+              </div>
             </div>
             <div style="display: flex; gap: 4px; flex-wrap: wrap;">
-              <button class="btn btn-primary btn-sm" onclick="launchSingleTask(${idx})" title="唤起分配账号并自动导入词和图">🚀 唤起导入</button>
-              <button class="btn btn-outline btn-sm" onclick="viewPrompt(${idx})">📄 查词</button>
-              <button class="btn btn-outline btn-sm" onclick="copyPrompt(${idx})">📋 复制</button>
+              <button class="btn btn-outline btn-sm" onclick="switchTaskWindow('${task.id}', '${task.assignedAccount || ''}')" style="color: #38bdf8; border-color: #38bdf860;" title="瞬间将该任务所在的 Chrome 窗口置顶到最前台">🎯 切到窗口</button>
+              <button class="btn btn-primary btn-sm" onclick="launchSingleTask(${idx})" title="唤起分配账号并自动导入词和图">🚀 唤起</button>
               ${videoActionBtns}
+              <button class="btn btn-outline btn-sm" onclick="viewPrompt(${idx})">📄 查词</button>
             </div>
             <div>
               <select class="form-control" style="font-size: 12px; padding: 4px 6px;" onchange="assignAccount(${idx}, this.value)">
                 ${accountOptions}
               </select>
             </div>
-            <div class="check-steps">
-              <label class="step-item"><input type="checkbox" ${task.sent ? 'checked' : ''} onchange="toggleStep(${idx}, 'sent', this.checked)"> 已发豆包</label>
-              <label class="step-item"><input type="checkbox" ${task.downloaded ? 'checked' : ''} onchange="toggleStep(${idx}, 'downloaded', this.checked)"> 素材就绪</label>
-              <label class="step-item"><input type="checkbox" ${task.edited ? 'checked' : ''} onchange="toggleStep(${idx}, 'edited', this.checked)"> 已出成片</label>
+            <div style="display: flex; align-items: center; justify-content: flex-start;" id="status-container-${task.id}">
+              ${autoStatusBadge}
             </div>
-            <div class="card-mini-actions">
-              <button class="btn-mini" onclick="moveTask(${idx}, -1)" title="上移任务" ${idx === 0 ? 'disabled' : ''}>▲</button>
-              <button class="btn-mini" onclick="moveTask(${idx}, 1)" title="下移任务" ${idx === currentTasks.length - 1 ? 'disabled' : ''}>▼</button>
+            <div class="card-mini-actions" style="display: flex; justify-content: flex-end;">
               <button class="btn-mini danger" onclick="deleteTask(${idx})" title="删除此任务">🗑️</button>
             </div>
           `;
@@ -1435,34 +1487,26 @@
         });
       }
 
-      // 同步更新“按账号打开任务”下拉列表 (严格排除已禁用账号)
-      const selSame = document.getElementById('select-same-account');
-      if (selSame) {
-        const assignedMap = {};
-        currentTasks.forEach(t => {
-          if (t.assignedAccount) {
-            assignedMap[t.assignedAccount] = (assignedMap[t.assignedAccount] || 0) + (!t.sent ? 1 : 0);
-          }
-        });
-        let sameHtml = '<option value="">按账号打开任务...</option>';
-        Object.keys(assignedMap).forEach(accId => {
-          const accObj = globalAccounts.find(a => a.id === accId);
-          if (accObj && accObj.status === 'disabled') return;
-          const name = accObj ? accObj.name : accId;
-          const seqPrefix = (accObj && accObj.seq) ? `[#${String(accObj.seq).padStart(2, '0')}] ` : '';
-          const count = assignedMap[accId];
-          sameHtml += `<option value="${accId}">${seqPrefix}${name} (${count}条待发)</option>`;
-        });
-        selSame.innerHTML = sameHtml;
-      }
-
       // 更新进度
-      const pct = currentTasks.length ? Math.round((doneCount / currentTasks.length) * 100) : 0;
-      document.getElementById('kanban-progress-label').innerText = `今日生产进度: ${doneCount} / ${currentTasks.length} (${pct}%)`;
-      document.getElementById('kanban-progress-fill').style.width = pct + '%';
+      updatePipelineProgress();
 
       // 同步任务勾选栏 UI
       updateSelectedTasksUI();
+    }
+
+    function updatePipelineProgress() {
+      const doneCount = currentTasks.filter(t => t.downloaded).length;
+      const pct = currentTasks.length ? Math.round((doneCount / currentTasks.length) * 100) : 0;
+      const progressLabel = document.getElementById('kanban-progress-label');
+      if (progressLabel) progressLabel.innerText = `素材入库进度: ${doneCount} / ${currentTasks.length} (${pct}%)`;
+      const progressFill = document.getElementById('kanban-progress-fill');
+      if (progressFill) progressFill.style.width = pct + '%';
+
+      const bDl = document.getElementById('badge-downloaded');
+      if (bDl) bDl.innerText = doneCount;
+      const readyCount = currentTasks.filter(t => (t.video_url || t.video_ready) && !t.downloaded).length;
+      const bReady = document.getElementById('badge-ready_video');
+      if (bReady) bReady.innerText = readyCount;
     }
 
     function toggleStep(idx, field, checked) {
@@ -1793,14 +1837,17 @@
 
     // 勾选任务一键平滑唤起核心方法（按账号智能聚合多标签页启动，彻底解决并发丢任务与 Profile 竞争问题）
     async function launchSelectedTasks() {
+      sanitizeSelectedTaskIds();
+
       if (selectedTaskIds.size === 0) {
         alert('请先在下方列表中勾选需要唤起的生产任务！');
         return;
       }
 
-      const tasksToLaunch = currentTasks.filter(t => selectedTaskIds.has(t.id));
+      // 严格红线过滤：一键唤起仅针对【未发送】(待发送) 的任务！已发送/已出片的任务绝不重复拉起
+      const tasksToLaunch = currentTasks.filter(t => selectedTaskIds.has(t.id) && !t.sent);
       if (tasksToLaunch.length === 0) {
-        alert('未找到勾选的任务！');
+        alert('当前勾选的任务中没有【待发送】的任务！\n\n💡 提示：所勾选任务均已在豆包生成中或已完成入库。如需重新发送，请在顶部批量菜单中选择【重置任务执行状态】。');
         return;
       }
 
@@ -1865,8 +1912,94 @@
     }
 
     // ================= 一键下载与视频预览 =================
-    // 1. 批量下载已选任务中就绪的无水印视频
+    // 单任务可视化平滑进度下载核心函数
+    async function downloadTaskWithProgress(task) {
+      const pContainer = document.getElementById(`dl-progress-${task.id}`);
+      const pBar = document.getElementById(`dl-bar-${task.id}`);
+      const pStatus = document.getElementById(`dl-status-text-${task.id}`);
+      const pPct = document.getElementById(`dl-pct-text-${task.id}`);
+      const statusContainer = document.getElementById(`status-container-${task.id}`);
+
+      if (pContainer) pContainer.style.display = 'block';
+      if (pBar) pBar.style.width = '10%';
+      if (pStatus) {
+        pStatus.style.color = '#60a5fa';
+        pStatus.innerText = '⏳ 正在请求素材...';
+      }
+      if (pPct) pPct.innerText = '10%';
+      if (statusContainer) {
+        statusContainer.innerHTML = `<span class="badge-status-pill" style="background: #3b82f625; color: #60a5fa; border: 1px solid #3b82f650;">⏳ 下载中...</span>`;
+      }
+
+      let currentPct = 10;
+      const timer = setInterval(() => {
+        if (currentPct < 90) {
+          currentPct += Math.max(1, Math.round((90 - currentPct) * 0.18));
+          if (pBar) pBar.style.width = currentPct + '%';
+          if (pPct) pPct.innerText = currentPct + '%';
+          if (pStatus) {
+            if (currentPct > 60) pStatus.innerText = '📥 正在写入磁盘...';
+            else if (currentPct > 30) pStatus.innerText = '⏳ 正在拉取视频流...';
+          }
+        }
+      }, 120);
+
+      try {
+        const res = await fetch('/api/tasks/download_videos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ task_ids: [task.id] })
+        });
+        const json = await res.json();
+        clearInterval(timer);
+
+        if (json.code === 0 && (!json.data.failed || json.data.failed.length === 0)) {
+          if (pBar) pBar.style.width = '100%';
+          if (pPct) pPct.innerText = '100%';
+          if (pStatus) {
+            pStatus.style.color = '#34d399';
+            pStatus.innerText = '✅ 下载完成并入库！';
+          }
+          if (statusContainer) {
+            statusContainer.innerHTML = `<span class="badge-status-pill badge-saved" title="无水印成片已下载入库【成品/素材/】">💾 素材已入库</span>`;
+          }
+
+          task.downloaded = true;
+          task.video_ready = true;
+          if (json.data && json.data.downloaded && json.data.downloaded[0]) {
+            task.local_video_path = json.data.downloaded[0].file_path;
+          }
+
+          updatePipelineProgress();
+
+          await new Promise(r => setTimeout(r, 700));
+          if (pContainer) pContainer.style.display = 'none';
+
+          return { success: true };
+        } else {
+          const errMsg = (json.data && json.data.failed && json.data.failed[0]) ? json.data.failed[0].error : (json.message || '下载失败');
+          if (pStatus) {
+            pStatus.style.color = '#ef4444';
+            pStatus.innerText = `❌ ${errMsg}`;
+          }
+          if (statusContainer) {
+            statusContainer.innerHTML = `<span class="badge-status-pill badge-ready" style="color: #ef4444; border-color: #ef4444;">❌ 下载失败</span>`;
+          }
+          return { success: false, error: errMsg };
+        }
+      } catch (err) {
+        clearInterval(timer);
+        if (pStatus) {
+          pStatus.style.color = '#ef4444';
+          pStatus.innerText = `❌ 请求异常: ${err}`;
+        }
+        return { success: false, error: err };
+      }
+    }
+
+    // 1. 批量下载已选任务中就绪的无水印视频 (逐条流式串行推进模式)
     async function downloadSelectedVideos() {
+      sanitizeSelectedTaskIds();
       if (selectedTaskIds.size === 0) {
         alert('请先在下方勾选需要下载无水印成片的工作台任务！');
         return;
@@ -1880,32 +2013,37 @@
         return;
       }
 
-      const confirmMsg = `即将下载已选的 ${readyTasks.length} 条成片到对应产品的【成品/素材/】目录：\n\n` +
+      const confirmMsg = `即将以逐条流式串行模式下载已选的 ${readyTasks.length} 条成片到对应产品的【成品/素材/】目录：\n\n` +
         readyTasks.map(t => `• [${t.id}] ${t.title}.mp4`).join('\n') +
-        `\n\n是否立即下载？`;
+        `\n\n是否立即开始流式下载？`;
       if (!confirm(confirmMsg)) return;
 
-      const targetIds = readyTasks.map(t => t.id);
-      showToast(`📥 正在流式下载 ${targetIds.length} 个无水印视频到【成品/素材/】，请稍候...`);
+      const dlBtn = document.getElementById('btn-download-selected');
+      if (dlBtn) dlBtn.disabled = true;
 
-      try {
-        const res = await fetch('/api/tasks/download_videos', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ task_ids: targetIds })
-        });
-        const json = await res.json();
-        if (json.code === 0) {
-          const results = json.data.results || [];
-          const successCount = results.filter(r => r.success).length;
-          showToast(`🎉 成功下载 ${successCount}/${targetIds.length} 条视频素材！任务已标记为【素材就绪】`);
-          await loadTasks(); // 重新拉取任务刷新
+      showToast(`📥 开始逐条流式下载 ${readyTasks.length} 个无水印视频到【成品/素材/】...`);
+
+      let successCount = 0;
+      let failCount = 0;
+
+      for (let i = 0; i < readyTasks.length; i++) {
+        const t = readyTasks[i];
+        showToast(`[${i + 1}/${readyTasks.length}] 正在下载 [${t.id}] ${t.title}...`);
+
+        const res = await downloadTaskWithProgress(t);
+        if (res.success) {
+          successCount++;
+          selectedTaskIds.delete(t.id); // 下载入库成功后自动取消勾选该任务
+          updateSelectedTasksUI();
         } else {
-          alert('下载失败: ' + json.message);
+          failCount++;
         }
-      } catch (err) {
-        alert('下载异常: ' + err);
       }
+
+      if (dlBtn) dlBtn.disabled = false;
+
+      showToast(`🎉 全部下载流转完毕！成功入库 ${successCount}/${readyTasks.length} 条成片${failCount > 0 ? `，${failCount} 条失败` : ''}`);
+      await loadTasks(); // 重新拉取以确保状态持久化完全同步
     }
 
     // 2. 单条下载视频
@@ -1918,21 +2056,12 @@
       }
 
       showToast(`📥 正在下载 [${task.id}] ${task.title}.mp4 到【成品/素材/】...`);
-      try {
-        const res = await fetch('/api/tasks/download_videos', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ task_ids: [task.id] })
-        });
-        const json = await res.json();
-        if (json.code === 0) {
-          showToast(`🎉 成功下载并入库！文件已保存至【成品/素材/】`);
-          await loadTasks();
-        } else {
-          alert('下载失败: ' + json.message);
-        }
-      } catch (err) {
-        alert('下载异常: ' + err);
+      const res = await downloadTaskWithProgress(task);
+      if (res.success) {
+        showToast(`🎉 成功下载并入库！文件已保存至【成品/素材/】`);
+        await loadTasks();
+      } else {
+        alert('下载失败: ' + (res.error || '未知网络异常'));
       }
     }
 
@@ -2293,19 +2422,6 @@
       } else {
         alert('防重拦截或失败: ' + json.message);
       }
-    }
-
-    // 4. 油猴脚本
-    async function loadTampermonkeyScript() {
-      const res = await fetch('/api/tampermonkey_script');
-      const json = await res.json();
-      document.getElementById('tampermonkey-code').value = json.data || '';
-    }
-
-    async function copyTampermonkeyCode() {
-      const code = document.getElementById('tampermonkey-code').value;
-      await navigator.clipboard.writeText(code);
-      showToast('油猴脚本代码已复制到剪贴板！');
     }
   </script>
 </body>

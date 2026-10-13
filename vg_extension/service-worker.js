@@ -42,6 +42,7 @@ const fetchPatterns = [
 
 const attachedTabs = new Set();
 const responseFileBodyPromises = new Map();
+const tabTaskMap = new Map(); // tabId -> { taskId, account, registerTime }
 let currentSettings = { ...DEFAULT_SETTINGS };
 
 function debugLog(...args) {
@@ -78,6 +79,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   attachedTabs.delete(tabId);
+  tabTaskMap.delete(tabId);
 });
 
 chrome.action.onClicked.addListener(async (tab) => {
@@ -105,8 +107,57 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
   }
 
+  if (message.type === "REGISTER_TAB_TASK") {
+    const tabId = sender?.tab?.id;
+    if (tabId && message.taskId) {
+      tabTaskMap.set(tabId, {
+        taskId: message.taskId,
+        account: message.account || "",
+        registerTime: Date.now()
+      });
+      debugLog("Registered tab task:", tabId, message.taskId);
+    }
+    sendResponse({ success: true });
+    return true;
+  }
+
+  if (message.type === "REPORT_VIDEO" && message.payload) {
+    const payload = message.payload;
+    fetch("http://127.0.0.1:8765/api/task/report_video", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    })
+      .then(r => r.json())
+      .then(data => sendResponse({ success: data.code === 0, data }))
+      .catch(err => {
+        console.warn("[VG ServiceWorker] 代理上报视频失败:", err);
+        sendResponse({ success: false, error: String(err) });
+      });
+    return true;
+  }
+
+  if (message.type === "BIND_SESSION" && message.payload) {
+    const payload = message.payload;
+    fetch("http://127.0.0.1:8765/api/task/bind_session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    })
+      .then(r => r.json())
+      .then(data => sendResponse({ success: data.code === 0, data }))
+      .catch(err => {
+        sendResponse({ success: false, error: String(err) });
+      });
+    return true;
+  }
+
   if (message.type === "DOWNLOAD_MEDIA" && isHttpUrl(message.url)) {
-    chrome.downloads.download({ url: message.url, saveAs: false })
+    const downloadOpts = { url: message.url, saveAs: false };
+    if (message.filename) {
+      downloadOpts.filename = message.filename;
+    }
+    chrome.downloads.download(downloadOpts)
       .then(() => sendResponse({ success: true }))
       .catch((error) => {
         console.warn("download failed:", error);
@@ -376,32 +427,9 @@ async function inspectChainSingleResponse(tabId, event, source) {
     await sendToTab(tabId, {
       type: "MEDIA_FOUND",
       sourceKey,
-      items
+      items,
+      timestamp: Date.now()
     });
-
-    // 直连 Web 工作台本地服务上报无水印视频！
-    const videoItems = items.filter(it => it.type === "video");
-    if (videoItems.length) {
-      try {
-        const tab = await safeGetTab(tabId);
-        const tabUrl = tab?.url || "";
-        const taskIdMatch = tabUrl.match(/vg_task=([A-Za-z0-9_-]+)/);
-        const taskId = taskIdMatch ? taskIdMatch[1] : "";
-        for (const v of videoItems) {
-          fetch("http://127.0.0.1:8765/api/task/report_video", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              task_id: taskId,
-              video_url: v.url,
-              source: "service-worker"
-            })
-          }).catch(err => console.warn("[VG ServiceWorker] 直连上报视频失败:", err));
-        }
-      } catch (err) {
-        console.warn("[VG ServiceWorker] 获取 tab 信息失败:", err);
-      }
-    }
   } else {
     await sendToTab(tabId, {
       type: "MEDIA_STATUS",
@@ -1137,3 +1165,87 @@ function setBadge(tabId, text) {
   chrome.action.setBadgeText({ tabId, text }).catch(() => {});
   chrome.action.setBadgeBackgroundColor({ tabId, color: "#166534" }).catch(() => {});
 }
+
+// ----------------- 精准 Tab 与会话切窗调度 -----------------
+async function pollPendingSwitches() {
+  try {
+    const res = await fetch("http://127.0.0.1:8765/api/tasks/pending_switch");
+    const json = await res.json();
+    if (json.code === 0 && json.data && json.data.length) {
+      for (const sw of json.data) {
+        await handleSwitchTask(sw);
+      }
+    }
+  } catch (err) {
+    // 忽略工作台未启动或网络瞬态错误
+  }
+}
+
+// 每 1.2 秒轮询一次是否有针对本 Chrome 实例的任务切窗请求
+setInterval(pollPendingSwitches, 1200);
+
+async function handleSwitchTask(sw) {
+  const taskId = sw.task_id;
+  const sessionUrl = sw.session_url;
+  if (!taskId) return;
+
+  const tabs = await chrome.tabs.query({});
+  let matchedTab = null;
+
+  // 1. 优先从 tabTaskMap 匹配
+  for (const [tabId, info] of tabTaskMap.entries()) {
+    if (info && info.taskId === taskId) {
+      const t = tabs.find(tab => tab.id === tabId);
+      if (t) { matchedTab = t; break; }
+    }
+  }
+
+  // 2. 根据 URL 包含 vg_task= 或 sessionUrl 匹配
+  if (!matchedTab) {
+    matchedTab = tabs.find(t => (t.url && t.url.includes(`vg_task=${taskId}`)) || 
+                                (sessionUrl && t.url && t.url.startsWith(sessionUrl.split('?')[0])));
+  }
+
+  // 3. 根据标题包含 [taskId] 匹配
+  if (!matchedTab) {
+    matchedTab = tabs.find(t => t.title && t.title.includes(`[${taskId}]`));
+  }
+
+  if (matchedTab) {
+    // 精准切换到该 Tab 并激活窗口
+    await chrome.tabs.update(matchedTab.id, { active: true });
+    if (matchedTab.windowId) {
+      await chrome.windows.update(matchedTab.windowId, { focused: true, drawAttention: true });
+    }
+    
+    // 若记录了明确会话地址，且该 Tab 尚未切到该会话，直接在原 Tab 导航到会话
+    if (sessionUrl && matchedTab.url && !matchedTab.url.includes(sessionUrl.split('?')[0])) {
+      await chrome.tabs.update(matchedTab.id, { url: sessionUrl });
+    }
+
+    // 发送高亮/切窗完成通知给页面
+    chrome.tabs.sendMessage(matchedTab.id, { type: "WINDOW_SWITCHED", taskId }).catch(() => {});
+    await ackPendingSwitch(taskId);
+    return;
+  }
+
+  // 4. 若当前所有 Tab 均未找到该任务，但记录了有效 session_url，则在当前窗口直接打开该会话
+  if (sessionUrl) {
+    const newTab = await chrome.tabs.create({ url: sessionUrl, active: true });
+    if (newTab.windowId) {
+      await chrome.windows.update(newTab.windowId, { focused: true });
+    }
+    await ackPendingSwitch(taskId);
+  }
+}
+
+async function ackPendingSwitch(taskId) {
+  try {
+    await fetch("http://127.0.0.1:8765/api/tasks/pending_switch/ack", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ task_id: taskId })
+    });
+  } catch (e) {}
+}
+

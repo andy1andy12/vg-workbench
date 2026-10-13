@@ -1,6 +1,10 @@
 /**
- * VG 豆包生产一键填词与参考图助手 - 原生 Chrome 扩展
- * 适配豆包 ProseMirror 富文本框架，支持提示词全文注入与参考图剪贴板直贴
+ * VG 豆包生产一键填词与参考图助手 - 原生 Chrome 扩展 (v2.0 极简闭环版)
+ * 1. 动态标题指纹 ([V01] 豆包) 强绑定窗口，支持工作台一键秒切置顶
+ * 2. 智能激活注入 (前台即时导入 / 后台切入瞬间导入)，彻底根治后台抢焦点丢图丢词
+ * 3. 任务与会话穿透持久化 (sessionStorage + Tab 注册表)，成片精准溯源
+ * 4. HUD 悬浮面板集成「📥 下载视频」原生一键下载，直存浏览器 Downloads 目录
+ * 5. 全链路支持上限 10 张参考图 Base64 直送，严禁截断
  */
 
 (function() {
@@ -10,10 +14,13 @@
     let currentTask = null;
     let autoInjected = false;
     let importInProgress = false;
+    let latestVideoUrl = '';
+    let titleWatcherTimer = null;
+    let taskPromptSentTime = 0;
 
-    console.log('[VG Extension 1.0] 豆包原生全自动生产助手启动');
+    console.log('[VG Extension 2.0] 豆包原生全自动生产助手启动');
 
-    // 解析当前 URL 或 Hash 中的任务 ID (例如 ?vg_task=V01 或 #vg_task=V01)
+    // 解析当前 URL、Hash 或 sessionStorage 中的任务 ID
     function getUrlTaskId() {
         try {
             const params = new URLSearchParams(window.location.search);
@@ -25,6 +32,10 @@
 
             const m = window.location.href.match(/vg_task=([A-Za-z0-9_-]+)/);
             if (m) return m[1];
+
+            // SPA 路由跳转后从 sessionStorage 恢复穿透
+            const cached = sessionStorage.getItem('vg_task_id');
+            if (cached) return cached;
         } catch (e) {}
         return '';
     }
@@ -48,6 +59,56 @@
             console.warn('[VG Extension] 拉取工作台任务上下文失败:', e);
         }
         return null;
+    }
+
+    // 动态注入并锁定网页标题指纹 [V01] 豆包 - 用于 Windows 瞬间置顶精准切窗
+    function setupTabTitleFingerprint(task) {
+        if (!task || !task.id) return;
+        const prefix = `[${task.id}] 豆包`;
+        const applyTitle = () => {
+            if (!document.title.startsWith(`[${task.id}]`)) {
+                const subTitle = task.title ? ` - ${task.title}` : '';
+                document.title = `${prefix}${subTitle}`;
+            }
+        };
+        applyTitle();
+        if (titleWatcherTimer) clearInterval(titleWatcherTimer);
+        titleWatcherTimer = setInterval(applyTitle, 1500);
+    }
+
+    // 向 Background 注册 Tab 任务身份映射
+    function registerTabWithBackground(task) {
+        if (!task || !task.id) return;
+        if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+            chrome.runtime.sendMessage({
+                type: 'REGISTER_TAB_TASK',
+                taskId: task.id,
+                account: task.account || ''
+            }).catch(() => {});
+        }
+    }
+
+    // 向服务端回传具体对话会话地址 (用于断点切窗)
+    async function reportSessionUrl(task) {
+        if (!task || !task.id) return;
+        const payload = {
+            task_id: task.id,
+            session_url: window.location.href,
+            account_id: task.account || ''
+        };
+        if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+            chrome.runtime.sendMessage({
+                type: 'BIND_SESSION',
+                payload: payload
+            }).catch(() => {});
+        }
+        try {
+            await fetch(`${API_BASE}/api/task/bind_session`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+        } catch (e) {}
     }
 
     // 寻找豆包输入框 (优先 ProseMirror / tiptap)
@@ -163,13 +224,13 @@
         return false;
     }
 
-    // 自动上传参考图片 (通过 Paste 派发给 ProseMirror)
+    // 自动上传参考图片 (通过 Paste 派发给 ProseMirror，上限全量 10 张，严禁截断)
     async function uploadReferenceImages(editorEl, images) {
         if (!images || images.length === 0 || !editorEl) return 0;
         
-        // 优先选取提示词中明确命中的所有图片（最多10张）；若未提及则兜底取前 4 张主要参考图
+        // 优先选取提示词中明确命中的所有图片（最多10张）；若未提及则兜底取前 10 张主要参考图
         const matchedImgs = images.filter(img => img.matched);
-        const targetImgs = matchedImgs.length > 0 ? matchedImgs.slice(0, 10) : images.slice(0, 4);
+        const targetImgs = matchedImgs.length > 0 ? matchedImgs.slice(0, 10) : images.slice(0, 10);
 
         let successCount = 0;
         for (const img of targetImgs) {
@@ -214,11 +275,11 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-            console.log('[VG Extension] 工作台已标记已发送 -1条额度');
+            console.log('[VG Extension] 工作台已标记已发送');
         } catch (e) {}
     }
 
-    // 执行全自动导入主逻辑
+    // 执行全自动导入主逻辑 (带 DOM 双重就绪校验)
     async function executeAutoImport(silent = false) {
         if (importInProgress) return;
         importInProgress = true;
@@ -247,8 +308,8 @@
             updateHUDStatus('⚡ 正在自动填入提示词...', '#3b82f6');
             injectPromptText(inputEl, currentTask.prompt);
 
-            // 复制提示词到系统剪贴板保底
-            if (currentTask.prompt && navigator.clipboard) {
+            // 复制提示词到系统剪贴板保底 (若有焦点)
+            if (currentTask.prompt && navigator.clipboard && document.hasFocus()) {
                 navigator.clipboard.writeText(currentTask.prompt).catch(() => {});
             }
 
@@ -259,9 +320,42 @@
                 await uploadReferenceImages(inputEl, currentTask.ref_images);
             }
 
-            updateHUDStatus('✅ 词与图已自动导入就绪！', '#10b981');
-            await markTaskSent(currentTask);
-            autoInjected = true;
+            // 文本注入校验
+            if (inputEl.innerText && inputEl.innerText.trim().length > 5) {
+                updateHUDStatus('✅ 词与图已自动导入就绪！', '#10b981');
+                await markTaskSent(currentTask);
+                autoInjected = true;
+                taskPromptSentTime = Date.now();
+                if (currentTask && currentTask.id) {
+                    sessionStorage.setItem(`vg_injected_${currentTask.id}`, '1');
+                    sessionStorage.setItem(`vg_sent_time_${currentTask.id}`, String(taskPromptSentTime));
+                }
+
+                // 绑定真实发送动作（点击发送按钮或回车）
+                const bindSendAction = () => {
+                    taskPromptSentTime = Date.now();
+                    if (currentTask && currentTask.id) {
+                        sessionStorage.setItem(`vg_sent_time_${currentTask.id}`, String(taskPromptSentTime));
+                    }
+                    updateHUDStatus('🔵 豆包生成中，自动监控成片...', '#3b82f6');
+                };
+
+                const sendBtn = document.querySelector('[data-testid="chat_input_send_button"]') ||
+                                document.querySelector('button[aria-label*="发送"]') ||
+                                document.querySelector('button[type="submit"]');
+                if (sendBtn && !sendBtn.dataset.vgBound) {
+                    sendBtn.dataset.vgBound = '1';
+                    sendBtn.addEventListener('click', bindSendAction);
+                }
+                if (!inputEl.dataset.vgBound) {
+                    inputEl.dataset.vgBound = '1';
+                    inputEl.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) bindSendAction();
+                    });
+                }
+            } else {
+                updateHUDStatus('⚠️ 提示词未成功填入，请点击重试', '#f59e0b');
+            }
         } catch (e) {
             console.error('[VG Extension] 导入失败:', e);
             updateHUDStatus('导入发生异常，可手动点击', '#ef4444');
@@ -296,7 +390,35 @@
         }
     }
 
-    // 创建右下角悬浮控制台 HUD
+    // 触发 Chrome 原生下载保存成片
+    function triggerNativeDownload() {
+        if (!latestVideoUrl) {
+            alert('暂未捕获到无水印成片链接！');
+            return;
+        }
+        const taskId = currentTask ? currentTask.id : 'VG';
+        const taskTitle = currentTask ? (currentTask.title || '成片') : '成片';
+        const safeTitle = taskTitle.replace(/[\\/*?:"<>|]/g, '_');
+        const filename = `[${taskId}]_${safeTitle}.mp4`;
+
+        if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+            chrome.runtime.sendMessage({
+                type: 'DOWNLOAD_MEDIA',
+                url: latestVideoUrl,
+                filename: filename
+            }, (res) => {
+                if (res && res.success) {
+                    updateHUDStatus(`✅ 已触发下载: ${filename}！`, '#10b981');
+                } else {
+                    window.open(latestVideoUrl, '_blank');
+                }
+            });
+        } else {
+            window.open(latestVideoUrl, '_blank');
+        }
+    }
+
+    // 创建右下角悬浮控制台 HUD (集成原生下载按钮)
     function renderHUD(task) {
         let old = document.getElementById('vg-assistant-hud');
         if (old) old.remove();
@@ -308,7 +430,7 @@
             bottom: 25px;
             right: 25px;
             z-index: 99999999;
-            width: 320px;
+            width: 330px;
             background: #181824;
             color: #e2e8f0;
             border-radius: 12px;
@@ -331,7 +453,7 @@
             refImgsHtml = `
                 <div style="margin-top: 8px;">
                     <div style="font-size: 11px; color: #94a3b8; margin-bottom: 4px;">关联参考图 (${displayImgs.length}张，点击可直拷)：</div>
-                    <div style="display: flex; gap: 6px; overflow-x: auto;">
+                    <div style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px;">
                         ${displayImgs.map((img, i) => `
                             <div style="background: #232336; border: 1px solid #3b4261; border-radius: 6px; padding: 4px; text-align: center; cursor: pointer; flex-shrink: 0;" id="vg-img-item-${i}" title="点击直接复制图片: ${img.name}">
                                 <img src="${img.base64 || img.url}" style="width: 52px; height: 52px; object-fit: cover; border-radius: 4px; display: block;" />
@@ -343,10 +465,15 @@
             `;
         }
 
+        const showDownloadBtn = !!(latestVideoUrl || (task && task.video_url));
+        if (!latestVideoUrl && task && task.video_url) {
+            latestVideoUrl = task.video_url;
+        }
+
         hud.innerHTML = `
             <div style="background: linear-gradient(135deg, #2563eb, #1d4ed8); padding: 10px 14px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; cursor: pointer;" id="vg-hud-header">
                 <span style="display: flex; align-items: center; gap: 6px;">
-                    ⚡ VG 原生助手 ${task ? `<span style="background: #fbbf24; color: #000; font-size: 11px; padding: 1px 6px; border-radius: 4px;">${task.id}</span>` : ''}
+                    ⚡ VG 原生助手 ${task ? `<span style="background: #fbbf24; color: #000; font-size: 11px; padding: 1px 6px; border-radius: 4px; font-weight: bold;">${task.id}</span>` : ''}
                 </span>
                 <span id="vg-hud-toggle" style="font-size: 14px;">▼</span>
             </div>
@@ -355,12 +482,15 @@
                     ${task ? task.title : '未绑定任务 (点击刷新)'}
                 </div>
                 <div id="vg-hud-status" style="font-size: 12px; color: #60a5fa; margin-bottom: 8px;">
-                    🟢 已就绪 (等待输入框)
+                    🟢 已就绪 (等待就绪)
                 </div>
                 ${refImgsHtml}
-                <div style="margin-top: 10px; display: flex; gap: 6px;">
+                <div style="margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap;">
                     <button id="vg-btn-import" style="flex: 1; background: #2563eb; color: #fff; border: none; padding: 8px 10px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; box-shadow: 0 2px 8px rgba(37,99,235,0.4);">
-                        🚀 重新自动导入 (词+图)
+                        🚀 重新自动导入
+                    </button>
+                    <button id="vg-btn-download" style="display: ${showDownloadBtn ? 'inline-flex' : 'none'}; align-items: center; justify-content: center; background: #059669; color: #fff; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; box-shadow: 0 2px 8px rgba(5,150,105,0.4);" title="直接通过 Chrome 下载管理器保存到系统 Downloads">
+                        📥 下载视频
                     </button>
                     <button id="vg-btn-copy" style="background: #334155; color: #cbd5e1; border: none; padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: 12px;">
                         📋 拷词
@@ -378,6 +508,7 @@
 
         // 按钮事件
         document.getElementById('vg-btn-import').addEventListener('click', () => executeAutoImport(false));
+        document.getElementById('vg-btn-download').addEventListener('click', triggerNativeDownload);
         document.getElementById('vg-btn-copy').addEventListener('click', async () => {
             if (task && task.prompt && navigator.clipboard) {
                 await navigator.clipboard.writeText(task.prompt);
@@ -388,37 +519,79 @@
         // 折叠展开
         let isCollapsed = false;
         document.getElementById('vg-hud-header').addEventListener('click', (e) => {
-            if (e.target.id === 'vg-btn-import' || e.target.id === 'vg-btn-copy') return;
+            if (e.target.id === 'vg-btn-import' || e.target.id === 'vg-btn-copy' || e.target.id === 'vg-btn-download') return;
             isCollapsed = !isCollapsed;
             document.getElementById('vg-hud-content').style.display = isCollapsed ? 'none' : 'block';
             document.getElementById('vg-hud-toggle').innerText = isCollapsed ? '▲' : '▼';
         });
     }
 
-    // 初始化轮询与自动执行
+    // 初始化智能激活调度与生命周期绑定
     async function init() {
         const taskId = getUrlTaskId();
         currentTask = await fetchTaskContext(taskId);
         
         if (currentTask) {
             console.log('[VG Extension] 成功加载任务数据:', currentTask.id, currentTask.title);
+            sessionStorage.setItem('vg_task_id', currentTask.id);
+            setupTabTitleFingerprint(currentTask);
+            registerTabWithBackground(currentTask);
+            reportSessionUrl(currentTask);
             renderHUD(currentTask);
 
-            // 轮询等待豆包输入框渲染，就绪后延时自动执行填入与传图
+            // 监听路由变化，及时同步会话 URL
+            let lastHref = window.location.href;
+            setInterval(() => {
+                if (window.location.href !== lastHref) {
+                    lastHref = window.location.href;
+                    reportSessionUrl(currentTask);
+                }
+            }, 3000);
+
+            // 智能激活策略判断：防重复注入拦截
+            const urlParams = new URLSearchParams(window.location.search);
+            const isViewOnlyMode = urlParams.get('vg_view') === '1' || urlParams.get('view_only') === '1';
+            const isAlreadySent = currentTask && (currentTask.sent || currentTask.status === 'generating' || currentTask.status === 'ready_video' || currentTask.status === 'downloaded');
+            const isAlreadyInjected = currentTask && sessionStorage.getItem(`vg_injected_${currentTask.id}`) === '1';
+
+            if (isViewOnlyMode || isAlreadySent || isAlreadyInjected) {
+                console.log('[VG Extension] 当前为查看/已发送/已就绪状态，严禁重复注入提示词与参考图');
+                updateHUDStatus(isAlreadySent ? '🎬 任务会话运行中 (监控中)' : '👁️ 查看/切窗模式', '#10b981');
+                return;
+            }
+
+            const isTabForeground = () => document.visibilityState === 'visible' && document.hasFocus();
+
+            // 轮询等待豆包输入框渲染
             let attempts = 0;
-            const timer = setInterval(async () => {
+            const timer = setInterval(() => {
                 attempts++;
                 const inputEl = findChatInput();
                 if (inputEl && !autoInjected) {
                     clearInterval(timer);
-                    updateHUDStatus('🎯 输入框已就绪，正在自动导入...');
-                    setTimeout(() => {
-                        executeAutoImport(true);
-                    }, 1000);
+
+                    if (isTabForeground()) {
+                        updateHUDStatus('🎯 前台窗口就绪，正在自动导入...', '#3b82f6');
+                        setTimeout(() => executeAutoImport(true), 600);
+                    } else {
+                        updateHUDStatus('💤 后台待命 (切到此页面将自动秒级导入)', '#a855f7');
+                        const onActivate = () => {
+                            if (!autoInjected && !importInProgress) {
+                                window.removeEventListener('focus', onActivate);
+                                document.removeEventListener('visibilitychange', onActivate);
+                                updateHUDStatus('🎯 窗口已激活，正在自动导入...', '#3b82f6');
+                                setTimeout(() => executeAutoImport(true), 300);
+                            }
+                        };
+                        window.addEventListener('focus', onActivate);
+                        document.addEventListener('visibilitychange', () => {
+                            if (document.visibilityState === 'visible') onActivate();
+                        });
+                    }
                 }
-                if (attempts > 40) {
+                if (attempts > 50) {
                     clearInterval(timer);
-                    updateHUDStatus('等待超时，请点击下方按钮手动导入');
+                    updateHUDStatus('等待超时，请点击按钮手动导入');
                 }
             }, 500);
         } else {
@@ -426,13 +599,38 @@
             renderHUD(null);
         }
 
-        // 监听后台 ServiceWorker 截获并解密的无水印视频消息
+        // 监听后台 ServiceWorker 截获并解密的无水印视频与切窗高亮消息
         if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
             chrome.runtime.onMessage.addListener(async (msg) => {
+                if (msg && msg.type === 'WINDOW_SWITCHED') {
+                    updateHUDStatus(`🎯 已切至任务 [${msg.taskId || ''}] 会话！`, '#10b981');
+                }
                 if (msg && msg.type === 'MEDIA_FOUND' && msg.items) {
+                    const taskId = currentTask ? currentTask.id : getUrlTaskId();
+                    const cachedSentTime = parseInt(sessionStorage.getItem(`vg_sent_time_${taskId}`) || '0', 10);
+                    const sentTime = taskPromptSentTime || cachedSentTime;
+
+                    // 严密生命周期契约：如果本任务尚未发送提示词，坚决忽略历史旧视频！
+                    if (!sentTime) {
+                        console.log('[VG Extension] 当前任务尚未发词，忽略页面初次加载拦截的历史旧视频');
+                        return;
+                    }
+
+                    // 防误判核心铁律：豆包视频生成至少需要 15 秒以上！
+                    // 若收到视频距离发词导入时间不足 15 秒，必为页面初次载入拉取的历史聊天旧视频，坚决忽略！
+                    const now = Date.now();
+                    const elapsed = now - sentTime;
+                    if (elapsed < 15000) {
+                        console.log(`[VG Extension] 忽略初次加载的历史旧视频 (距发词仅 ${Math.round(elapsed / 1000)}s < 15s)`);
+                        return;
+                    }
+
                     const videoItems = msg.items.filter(it => it.type === 'video');
                     for (const v of videoItems) {
-                        console.log('[VG Extension] 网页端接收到解密的无水印视频:', v.url);
+                        console.log('[VG Extension] 成功捕获本次发词后生成的新成片:', v.url);
+                        latestVideoUrl = v.url;
+                        const dlBtn = document.getElementById('vg-btn-download');
+                        if (dlBtn) dlBtn.style.display = 'inline-flex';
                         await reportVideoReady(v.url);
                     }
                 }
@@ -444,22 +642,56 @@
     async function reportVideoReady(videoUrl) {
         const taskId = currentTask ? currentTask.id : getUrlTaskId();
         updateHUDStatus('🎉 已捕获无水印成片！正在同步工作台...');
+        
+        const payload = {
+            task_id: taskId,
+            video_url: videoUrl,
+            account_id: (currentTask && currentTask.account) ? currentTask.account : ''
+        };
+
+        // 优先通过 service worker 代理请求，避开页面级 PNA / Mixed Content 阻断
+        if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+            try {
+                const res = await new Promise((resolve) => {
+                    chrome.runtime.sendMessage({
+                        type: 'REPORT_VIDEO',
+                        payload: payload
+                    }, (response) => {
+                        if (chrome.runtime.lastError) {
+                            resolve(null);
+                        } else {
+                            resolve(response);
+                        }
+                    });
+                });
+
+                if (res && res.success) {
+                    const reportedTaskId = res.data?.task_id || taskId;
+                    updateHUDStatus(`✅ 成片已绑定 [${reportedTaskId}]，可点击下载！`, '#10b981');
+                    const dlBtn = document.getElementById('vg-btn-download');
+                    if (dlBtn) dlBtn.style.display = 'inline-flex';
+                    return;
+                }
+            } catch (err) {
+                console.warn('[VG Extension] Service worker 上报异常，降级直连:', err);
+            }
+        }
+
+        // 降级直连 fetch
         try {
             const resp = await fetch(`${API_BASE}/api/task/report_video`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    task_id: taskId,
-                    video_url: videoUrl,
-                    account_id: (currentTask && currentTask.account) ? currentTask.account : ''
-                })
+                body: JSON.stringify(payload)
             });
             const data = await resp.json();
             if (data.code === 0) {
-                updateHUDStatus(`✅ 无水印视频已成功绑定任务 [${data.task_id || taskId || '已分配'}]！`);
+                updateHUDStatus(`✅ 成片已绑定 [${data.task_id || taskId}]，可点击下载！`, '#10b981');
+                const dlBtn = document.getElementById('vg-btn-download');
+                if (dlBtn) dlBtn.style.display = 'inline-flex';
             }
         } catch (e) {
-            console.warn('[VG Extension] 上报视频失败:', e);
+            console.warn('[VG Extension] 上报视频直连失败:', e);
         }
     }
 
