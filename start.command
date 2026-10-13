@@ -32,3 +32,4 @@ fi
 
 echo "🌐 启动本地服务: http://127.0.0.1:$PORT"
 $PYTHON_CMD server.py
+

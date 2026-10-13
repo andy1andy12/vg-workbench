@@ -92,9 +92,9 @@ CHROME_USER_DATA_DIR = resolve_chrome_user_data_dir()
 # 动态探测脚手架脚本
 def resolve_scaffold_script():
     candidates = [
+        WORKBENCH_DIR / "scripts" / "scaffold.py",
         Path.home() / ".agents" / ".agents" / "skills" / "vg-index-checker" / "scripts" / "scaffold.py",
-        Path.home() / ".agents" / "skills" / "vg-index-checker" / "scripts" / "scaffold.py",
-        WORKBENCH_DIR / "scripts" / "scaffold.py"
+        Path.home() / ".agents" / "skills" / "vg-index-checker" / "scripts" / "scaffold.py"
     ]
     for c in candidates:
         if c.exists():
@@ -932,7 +932,12 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
         elif path == "/api/scaffold/run":
             # 调用 scaffold.py 执行骨架创建
             cmd_type = payload.get("type") # new-product, new-script, new-variant
-            cmd = [sys.executable, str(SCAFFOLD_SCRIPT), cmd_type]
+            scaffold_path = resolve_scaffold_script()
+            if not scaffold_path.exists():
+                self.send_json({"code": 1, "message": f"未找到脚手架脚本，请确保 scripts/scaffold.py 存在: {scaffold_path}"}, status=500)
+                return
+
+            cmd = [sys.executable, str(scaffold_path), "--root", str(VG_ROOT), cmd_type]
             if cmd_type == "new-product":
                 cmd.extend(["--name", payload["name"], "--category", payload.get("category", "车品配件"), "--desc", payload.get("desc", "")])
             elif cmd_type == "new-script":
