@@ -121,6 +121,33 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.type === "CLOSE_CURRENT_TAB") {
+    const tabId = sender?.tab?.id;
+    const windowId = sender?.tab?.windowId;
+    if (tabId) {
+      (async () => {
+        try {
+          if (windowId) {
+            const windowTabs = await chrome.tabs.query({ windowId });
+            if (windowTabs.length <= 1) {
+              await chrome.tabs.create({ windowId, url: "chrome://newtab", active: true });
+            }
+          }
+          await chrome.tabs.remove(tabId);
+          tabTaskMap.delete(tabId);
+        } catch (e) {}
+      })();
+    }
+    sendResponse({ success: true });
+    return true;
+  }
+
+  if (message.type === "CLOSE_TASK_TAB_BY_ID" && message.taskId) {
+    handleSwitchTask({ task_id: message.taskId, action: "close" }).catch(() => {});
+    sendResponse({ success: true });
+    return true;
+  }
+
   if (message.type === "REPORT_VIDEO" && message.payload) {
     const payload = message.payload;
     fetch("http://127.0.0.1:8765/api/task/report_video", {
@@ -412,8 +439,15 @@ async function inspectChainSingleResponse(tabId, event, source) {
   const response = await getPausedResponseBody(tabId, event.requestId);
 
   let items = [];
+  let conversationId = "";
   try {
     const json = JSON.parse(response.body);
+    const convIds = findValuesByKey(json, "conversation_id");
+    if (convIds.length && convIds[0]) conversationId = String(convIds[0]);
+    if (!conversationId) {
+      const chatIds = findValuesByKey(json, "chat_id");
+      if (chatIds.length && chatIds[0]) conversationId = String(chatIds[0]);
+    }
     if (source === "doubao") {
       items = await extractDoubaoItems(json, response.body);
     } else {
@@ -423,11 +457,16 @@ async function inspectChainSingleResponse(tabId, event, source) {
     console.warn(`${source} chain parse failed:`, error.message || error);
   }
 
+  const tab = await safeGetTab(tabId);
+  const taskInfo = tabTaskMap.get(tabId);
   if (items.length) {
     await sendToTab(tabId, {
       type: "MEDIA_FOUND",
       sourceKey,
       items,
+      conversationId,
+      targetTaskId: taskInfo ? taskInfo.taskId : "",
+      tabUrl: tab?.url || "",
       timestamp: Date.now()
     });
   } else {
@@ -1200,15 +1239,60 @@ async function handleSwitchTask(sw) {
     }
   }
 
-  // 2. 根据 URL 包含 vg_task= 或 sessionUrl 匹配
+  // 2. 根据 URL 包含 vg_task= 或 sessionUrl / 会话ID 匹配
   if (!matchedTab) {
-    matchedTab = tabs.find(t => (t.url && t.url.includes(`vg_task=${taskId}`)) || 
-                                (sessionUrl && t.url && t.url.startsWith(sessionUrl.split('?')[0])));
+    const convMatch = sessionUrl ? sessionUrl.match(/\/chat\/([A-Za-z0-9_-]+)/) : null;
+    const convId = convMatch ? convMatch[1] : "";
+    matchedTab = tabs.find(t => {
+      if (!t.url) return false;
+      if (t.url.includes(`vg_task=${taskId}`)) return true;
+      if (sessionUrl && t.url.startsWith(sessionUrl.split('?')[0])) return true;
+      if (convId && convId !== 'new' && t.url.includes(`/chat/${convId}`)) return true;
+      return false;
+    });
   }
 
   // 3. 根据标题包含 [taskId] 匹配
   if (!matchedTab) {
     matchedTab = tabs.find(t => t.title && t.title.includes(`[${taskId}]`));
+  }
+
+  // 4. 发送 PING_TASK_MATCH 消息向所有豆包标签页深度反向寻址
+  if (!matchedTab) {
+    for (const t of tabs) {
+      if (t.url && (t.url.includes("doubao.com") || t.url.includes("dola.com"))) {
+        try {
+          const resp = await chrome.tabs.sendMessage(t.id, { type: "PING_TASK_MATCH", taskId, sessionUrl });
+          if (resp && resp.matched) {
+            matchedTab = t;
+            break;
+          }
+        } catch (e) {}
+      }
+    }
+  }
+
+  // 若指令为关闭已完成任务标签页，直接移除 Tab 释放资源（严格保护窗口不被连带销毁）
+  if (sw.action === "close") {
+    if (matchedTab) {
+      try {
+        if (matchedTab.windowId) {
+          const windowTabs = await chrome.tabs.query({ windowId: matchedTab.windowId });
+          if (windowTabs.length <= 1) {
+            // 保护：如果这是窗口内唯一的标签页，直接关闭标签页会导致整个窗口被操作系统销毁！
+            // 遵从用户铁律“关闭对应标签页，不是关闭整个窗口”，先新建默认标签页再关闭任务页
+            await chrome.tabs.create({ windowId: matchedTab.windowId, url: "chrome://newtab", active: true });
+          }
+        }
+        await chrome.tabs.remove(matchedTab.id);
+        tabTaskMap.delete(matchedTab.id);
+        debugLog("Closed completed task tab:", matchedTab.id, taskId);
+      } catch (e) {
+        console.warn("[VG ServiceWorker] 关闭任务标签页异常:", e);
+      }
+    }
+    await ackPendingSwitch(taskId);
+    return;
   }
 
   if (matchedTab) {
@@ -1248,4 +1332,14 @@ async function ackPendingSwitch(taskId) {
     });
   } catch (e) {}
 }
+
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg && msg.action === "GET_DOUBAO_COOKIES") {
+    chrome.cookies.getAll({ domain: "doubao.com" }, (cookies) => {
+      sendResponse({ success: true, cookies: cookies || [] });
+    });
+    return true;
+  }
+});
+
 

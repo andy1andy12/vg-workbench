@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "VG 豆包生产填词与无水印下载助手",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "与本地 VG Web 工作台全自动联动：按任务自动获取提示词和参考图，自动精准填入豆包输入框；自动拦截解密豆包无水印视频直链并同步至工作台一键下载",
   "icons": {
     "48": "icon.png",
@@ -11,7 +11,8 @@
     "debugger",
     "tabs",
     "storage",
-    "clipboardWrite"
+    "clipboardWrite",
+    "cookies"
   ],
   "host_permissions": [
     "http://127.0.0.1:8765/*",
@@ -29,9 +30,12 @@
         "https://www.doubao.com/*",
         "https://doubao.com/*",
         "*://*.doubao.com/*",
-        "*://*.dola.com/*"
+        "*://*.dola.com/*",
+        "http://127.0.0.1:8765/*"
       ],
-      "js": ["content.js"],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_end"
     }
   ],

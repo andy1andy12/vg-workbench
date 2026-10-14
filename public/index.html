@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VG 视频生产与账号矩阵工作台</title>
+  <title>VG 视频制作工作台</title>
   <style>
     :root {
       --bg: #0f172a;
@@ -52,12 +52,14 @@
     .stat-label { font-size: 12px; color: var(--text-muted); margin-bottom: 6px; }
     .stat-val { font-size: 24px; font-weight: 700; color: #fff; }
 
-    .accounts-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 14px; }
-    .account-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 8px; padding: 14px; transition: all 0.2s; position: relative; }
+    .accounts-grid { display: flex; flex-direction: column; gap: 3px; }
+    .account-card { display: grid; grid-template-columns: minmax(220px, 1fr) 250px auto; align-items: center; gap: 14px; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 5px; padding: 7px 12px; transition: all 0.2s; position: relative; }
     .account-card.ready { border-left: 4px solid var(--success); }
     .account-card.exhausted { opacity: 0.55; border-left: 4px solid var(--card-border); }
     .account-card.disabled { opacity: 0.45; border-left: 4px solid #ef4444; background: rgba(15, 23, 42, 0.7); }
-    .account-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+    .account-card-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-width: 0; }
+    .account-card-header > div { min-width: 0; }
+    .account-name span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .account-name { font-weight: 600; font-size: 14px; color: #fff; }
     .account-sub { font-size: 12px; color: var(--text-muted); }
     .badge-status { font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
@@ -65,14 +67,20 @@
     .badge-exhausted { background: #64748b20; color: #94a3b8; }
     .badge-disabled { background: #ef444420; color: #f87171; border: 1px solid #ef444450; }
     
-    .quota-meters { display: flex; gap: 8px; margin: 12px 0; background: #0f172a80; padding: 8px 10px; border-radius: 6px; }
-    .quota-item { flex: 1; text-align: center; }
-    .quota-num { font-size: 16px; font-weight: 700; color: #60a5fa; }
-    .quota-tag { font-size: 10px; color: var(--text-muted); }
+    .quota-meters { display: flex; gap: 12px; padding: 3px 6px; }
+    .quota-item { flex: 1; display: flex; align-items: baseline; justify-content: center; gap: 5px; }
+    .quota-num { font-size: 17px; font-weight: 700; color: #60a5fa; font-variant-numeric: tabular-nums; }
+    .quota-tag { font-size: 12px; color: var(--text-muted); }
 
-    .account-actions { display: flex; gap: 6px; margin-top: 10px; }
+    .account-actions { display: flex; gap: 6px; }
+    @media (max-width: 1050px) {
+      .account-card { grid-template-columns: minmax(220px, 1fr) minmax(200px, 280px); gap: 12px; }
+      .account-actions { grid-column: 1 / -1; justify-content: flex-end; }
+      .account-actions .btn { flex: 0 0 auto !important; }
+    }
+    @media (max-width: 620px) { .account-card { grid-template-columns: 1fr; } .account-actions { flex-wrap: wrap; } }
 
-    /* 流水线工单 */
+    /* 任务列表工单 */
     .kanban-setup { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 8px; padding: 18px; margin-bottom: 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; align-items: flex-end; }
     .form-group label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 6px; }
     .form-control { width: 100%; background: #0f172a; border: 1px solid var(--card-border); border-radius: 6px; padding: 8px 12px; color: #fff; font-size: 13px; outline: none; }
@@ -85,7 +93,7 @@
     .pipeline-scroll-area::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
     .pipeline-scroll-area::-webkit-scrollbar-thumb:hover { background: #475569; }
 
-    .kanban-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 8px; padding: 12px 16px; display: grid; grid-template-columns: 28px 65px 1.4fr auto 165px 135px 36px; align-items: center; gap: 10px; transition: all 0.2s; }
+    .kanban-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 8px; padding: 12px 16px; display: grid; grid-template-columns: 28px 115px 1.4fr auto 165px 135px 36px; align-items: center; gap: 10px; transition: all 0.2s; }
     .kanban-card:hover { border-color: #3b82f6; }
     .kanban-card.selected { border-color: #3b82f6; background: rgba(37, 99, 235, 0.12); box-shadow: 0 0 0 1px #3b82f660; }
     .task-select-cb { width: 17px; height: 17px; accent-color: #2563eb; cursor: pointer; }
@@ -103,7 +111,7 @@
     .badge-status-pill.badge-sent { background: #3b82f625; color: #60a5fa; border: 1px solid #3b82f650; }
     .badge-status-pill.badge-waiting { background: #33415540; color: #94a3b8; border: 1px solid #47556940; }
 
-    /* 流水线精细化管理工具栏 */
+    /* 任务列表精细化管理工具栏 */
     .pipeline-toolbar { background: #131b2e; border: 1px solid var(--card-border); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
     .filter-tabs { display: flex; gap: 6px; }
     .filter-tab { background: transparent; border: 1px solid transparent; color: var(--text-muted); padding: 5px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s; }
@@ -177,6 +185,15 @@
 
     /* Toast 通知 */
     #toast { position: fixed; bottom: 24px; right: 24px; background: #1e293b; color: #fff; border: 1px solid var(--card-border); padding: 12px 20px; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.4); display: none; z-index: 1000; font-size: 13px; }
+
+    .beginner-guide { border: 1px solid var(--card-border); background: var(--card-bg); border-radius: 8px; padding: 16px; margin-bottom: 20px; }
+    .beginner-guide h2 { font-size: 15px; margin-bottom: 6px; }
+    .beginner-guide p { font-size: 12px; color: #cbd5e1; line-height: 1.7; }
+    .beginner-steps { list-style: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+    .beginner-steps li { padding: 10px 12px; background: var(--bg); border-radius: 6px; }
+    .beginner-steps strong { display: block; font-size: 13px; margin-bottom: 4px; color: #93c5fd; }
+    @media (max-width: 900px) { .beginner-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 540px) { .beginner-steps { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -184,30 +201,39 @@
   <!-- 顶部导航 -->
   <header>
     <div class="header-title">
-      <h1>VG 视频生产与账号矩阵工作台</h1>
+      <h1>VG 视频制作工作台</h1>
       <span class="header-badge">本地极速版</span>
     </div>
     <div class="header-actions">
-      <button class="btn btn-outline btn-sm" onclick="openVGFolder()">📁 打开 VG 根目录</button>
-      <button class="btn btn-success btn-sm" id="btn-reset-accounts" onclick="resetAllAccounts()">🌅 账号算力今日满血重置</button>
+      <button class="btn btn-primary btn-sm" onclick="openLibraryGuide()">📁 文件与识别说明</button>
+      <button class="btn btn-outline btn-sm" onclick="openVGFolder()">📁 打开产品文件夹</button>
+      <button class="btn btn-success btn-sm" id="btn-reset-accounts" onclick="resetAllAccounts()">🌅 重置今日剩余次数</button>
       <button class="btn btn-outline btn-sm" onclick="refreshAll()">🔄 刷新数据</button>
     </div>
   </header>
 
   <!-- 选项卡切换 -->
   <div class="nav-tabs">
-    <button class="tab-btn active" id="tab-btn-matrix" onclick="switchTab('matrix', this)">⚡ 账号算力矩阵</button>
-    <button class="tab-btn" id="tab-btn-kanban" onclick="switchTab('kanban', this)">📋 每日制作流水线</button>
-    <button class="tab-btn" id="tab-btn-scaffold" onclick="switchTab('scaffold', this)">🏗️ 资产规范脚手架</button>
-    <button class="tab-btn" id="tab-btn-plugin" onclick="switchTab('plugin', this)">🔌 豆包一键填词助手</button>
+    <button class="tab-btn active" id="tab-btn-matrix" onclick="switchTab('matrix', this)">⚡ 账号管理</button>
+    <button class="tab-btn" id="tab-btn-kanban" onclick="switchTab('kanban', this)">📋 制作任务</button>
   </div>
 
   <main>
-    <!-- 选项卡 1：账号矩阵 -->
+    <section class="beginner-guide" aria-labelledby="beginner-guide-title">
+      <h2 id="beginner-guide-title">第一次使用？按这 4 步制作视频</h2>
+      <p>提示词、参考图和账号已准备好。点击上方「制作任务」开始；「账号管理」用于查看剩余次数或停用账号。</p>
+      <ol class="beginner-steps">
+        <li><strong>1. 选择提示词</strong><p>选择产品和文件夹，勾选提示词，设置生成次数，再点「添加到制作任务」。</p></li>
+        <li><strong>2. 查看分配结果</strong><p>添加任务时已自动分配账号；额度不足的任务显示待分配，可手动选择账号。</p></li>
+        <li><strong>3. 打开豆包生成</strong><p>勾选待发送任务，点「打开豆包」。文字和参考图会自动填入；检查后在豆包点击发送。</p></li>
+        <li><strong>4. 下载成片</strong><p>等任务显示「视频就绪」，勾选后点「下载成片」。保存位置见「成片下载至」，下载后点「打开成片目录」。</p></li>
+      </ol>
+    </section>
+    <!-- 选项卡 1：账号管理 -->
     <div id="tab-matrix" class="tab-content active">
       <div class="stats-row">
         <div class="stat-card">
-          <div class="stat-label">总纳管 Chrome 资料</div>
+          <div class="stat-label">已添加账号</div>
           <div class="stat-val" id="stat-total-acc">0 个</div>
         </div>
         <div class="stat-card">
@@ -215,26 +241,27 @@
           <div class="stat-val" style="color: #34d399;" id="stat-ready-acc">0 个</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">今日剩余生成潜能 (10秒视频)</div>
+          <div class="stat-label">今日剩余次数（10秒视频）</div>
           <div class="stat-val" style="color: #60a5fa;" id="stat-total-10s">0 条</div>
         </div>
       </div>
 
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
-        <h2 style="font-size: 16px; font-weight: 600;" id="matrix-title-heading">账号算力池监控网格</h2>
+        <h2 style="font-size: 16px; font-weight: 600;" id="matrix-title-heading">账号与剩余次数</h2>
         <div style="display: flex; gap: 8px;">
           <button class="btn btn-outline btn-sm" onclick="filterAccounts('all')">显示全部</button>
           <button class="btn btn-outline btn-sm" onclick="filterAccounts('ready')">仅看有余额</button>
           <button class="btn btn-outline btn-sm" onclick="filterAccounts('disabled')">仅看已禁用</button>
         </div>
       </div>
+      <p style="font-size:12px;color:var(--text-muted);margin:0 0 8px">每日 00:00（UTC+8）自动重置额度；剩余次数按 10秒 / 5秒 / 15秒 展示，可手动校准。</p>
 
       <div class="accounts-grid" id="accounts-grid">
         <!-- 账号卡片动态插入 -->
       </div>
     </div>
 
-    <!-- 选项卡 2：每日制作流水线 (第一性原理极简纯净版) -->
+    <!-- 选项卡 2：制作任务 (第一性原理极简纯净版) -->
     <div id="tab-kanban" class="tab-content">
       <!-- 顶部固定操作栏 (吸顶固定，滚轮浏览任务时永远驻留顶部) -->
       <div class="pipeline-sticky-header">
@@ -243,32 +270,44 @@
           <!-- 左侧：生产核心动作 -->
           <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
             <button class="btn btn-primary" onclick="openTaskPickerDrawer()" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); border: none; font-weight: 700; height: 36px; padding: 0 16px; font-size: 13px; box-shadow: 0 4px 12px rgba(99,102,241,0.35);">
-              📁 挑选添加任务
-            </button>
-            <button class="btn btn-primary" onclick="autoAssignAccountsSmart()" style="background: linear-gradient(135deg, #3b82f6, #2563eb); border: none; font-weight: 700; height: 36px; padding: 0 14px; font-size: 13px;" title="按算力池 26 账号今日剩余额度自动均匀分配">
-              ⚡ 智能分配账号
+              📁 1. 选择提示词
             </button>
             <button class="btn btn-primary" id="btn-launch-selected" onclick="launchSelectedTasks()" style="background: linear-gradient(135deg, #2563eb, #10b981); border: none; font-weight: 700; height: 36px; padding: 0 16px; font-size: 13px; box-shadow: 0 4px 12px rgba(37,99,235,0.35);">
-              🚀 一键唤起已选 (<span id="selected-tasks-count">0</span>条)
+              🚀 2. 打开豆包 (<span id="selected-tasks-count">0</span>条)
             </button>
             <button class="btn btn-primary" id="btn-download-selected" onclick="downloadSelectedVideos()" style="background: linear-gradient(135deg, #059669, #10b981); border: none; font-weight: 700; height: 36px; padding: 0 16px; font-size: 13px; box-shadow: 0 4px 12px rgba(16,185,129,0.35);" title="一键将勾选且已捕获无水印视频的任务下载到【成品/素材/】目录">
-              📥 一键下载已选 (<span id="selected-download-count">0</span>条)
-            </button>
-            <button class="btn btn-outline" onclick="openProductMaterialFolderDirect()" style="font-size: 12px; height: 36px; color: #6ee7b7; border-color: #10b98150;" title="在资源管理器中打开当前产品的【成品/素材/】目录">
-              📁 打开素材目录
+              📥 3. 下载成片 (<span id="selected-download-count">0</span>条)
             </button>
           </div>
 
           <!-- 右侧：资产目录与快照管理 -->
           <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-            <button class="btn btn-outline btn-sm" onclick="openCurrentProductRefFolderDirect()" style="height: 34px; padding: 0 10px; font-size: 12px;" title="查看产品参考图目录">
-              🖼️ 打开参考图
-            </button>
             <button class="btn btn-outline btn-sm" onclick="openSnapshotsModal()" style="height: 34px; padding: 0 10px; font-size: 12px;" title="查看历史自动按日快照并支持一键回滚">
-              📅 历史快照
+              📅 历史记录
             </button>
-            <button class="btn btn-outline btn-sm" onclick="batchClearAllTasks()" style="height: 34px; padding: 0 10px; font-size: 12px; color: #f87171; border-color: #ef444450;" title="清空流水线所有任务">
+            <button class="btn btn-outline btn-sm" id="btn-delete-selected" onclick="deleteSelectedTasks()" style="height: 34px; padding: 0 10px; font-size: 12px; color: #fb923c; border-color: #f9731650;" title="批量删除当前勾选的任务">
+              🗑️ 删除勾选 (<span id="delete-selected-count">0</span>)
+            </button>
+            <button class="btn btn-outline btn-sm" onclick="batchClearAllTasks()" style="height: 34px; padding: 0 10px; font-size: 12px; color: #f87171; border-color: #ef444450;" title="清空任务列表所有任务">
               🗑️ 清空列表
+            </button>
+          </div>
+        </div>
+
+        <!-- 成片下载目标目录设置条 (用户自定义保存位置) -->
+        <div style="background: #0f172a; border: 1px solid var(--card-border); border-radius: 8px; padding: 6px 14px; margin-bottom: 8px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 300px;">
+            <span style="font-size: 12px; font-weight: 700; color: #34d399; display: flex; align-items: center; gap: 4px; white-space: nowrap;">
+              💾 成片下载至:
+            </span>
+            <input type="text" id="custom-download-dir" class="form-control" style="height: 28px; font-size: 12px; padding: 2px 10px; flex: 1; min-width: 200px; background: #1e293b; border-color: #3b82f650; color: #fff;" placeholder="选择或粘贴成片保存目录" onchange="saveDownloadDirSetting(this.value)" onkeyup="if(event.key==='Enter') saveDownloadDirSetting(this.value)" title="可直接手动输入或粘贴完整路径，按回车保存；也可点击右侧【修改路径】弹窗选择">
+          </div>
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <button class="btn btn-primary btn-sm" id="btn-choose-download-dir" onclick="chooseDownloadDirFromExplorer()" style="padding: 2px 12px; font-size: 11px; height: 28px; background: #2563eb; color: #fff; font-weight: 600;" title="点击弹出文件资源管理器选择文件夹">
+              📁 修改路径
+            </button>
+            <button class="btn btn-outline btn-sm" onclick="openCurrentDownloadDir()" style="padding: 2px 10px; font-size: 11px; height: 28px; color: #34d399; border-color: #10b98150;" title="在系统资源管理器中打开当前成片保存目录">
+              📂 打开成片目录
             </button>
           </div>
         </div>
@@ -282,16 +321,19 @@
             <button class="filter-tab" id="tab-filter-waiting_sent" onclick="setTaskFilter('waiting_sent')">
               待发送 <span class="badge" id="badge-waiting_sent">0</span>
             </button>
+            <button class="filter-tab" id="tab-filter-generating" onclick="setTaskFilter('generating')">
+              🔵 生成中 <span class="badge" id="badge-generating">0</span>
+            </button>
             <button class="filter-tab" id="tab-filter-ready_video" onclick="setTaskFilter('ready_video')">
               🎬 视频就绪 (可下载) <span class="badge" id="badge-ready_video">0</span>
             </button>
             <button class="filter-tab" id="tab-filter-downloaded" onclick="setTaskFilter('downloaded')">
-              💾 素材已入库 <span class="badge" id="badge-downloaded">0</span>
+              💾 已下载 <span class="badge" id="badge-downloaded">0</span>
             </button>
           </div>
 
           <div style="display: flex; align-items: center; gap: 12px;">
-            <span style="font-size: 12px; font-weight: 600; color: #cbd5e1;" id="kanban-progress-label">素材入库进度: 0 / 0 (0%)</span>
+            <span style="font-size: 12px; font-weight: 600; color: #cbd5e1;" id="kanban-progress-label">成片下载进度: 0 / 0 (0%)</span>
             <div style="width: 140px; height: 6px; background: #334155; border-radius: 3px; overflow: hidden;">
               <div class="progress-bar-fill" id="kanban-progress-fill" style="width: 0%; height: 100%; background: linear-gradient(90deg, #3b82f6, #10b981); transition: width 0.3s;"></div>
             </div>
@@ -320,75 +362,6 @@
       </div>
     </div>
 
-    <!-- 选项卡 3：规范脚手架 -->
-    <div id="tab-scaffold" class="tab-content">
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px;">
-        
-        <!-- 新建产品 -->
-        <div class="stat-card">
-          <h3 style="font-size: 15px; margin-bottom: 12px; color: #60a5fa;">📦 新建产品目录 (自动自增序号)</h3>
-          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">自动识别当前最大编号创建 0XX 目录，配备参考图、成品及总索引，并同步更新 000_VG总导航.md。</p>
-          <div class="form-group" style="margin-bottom: 10px;">
-            <label>产品中文名称</label>
-            <input type="text" id="scaffold-prod-name" class="form-control" placeholder="例如: 智能车载香薰">
-          </div>
-          <div class="form-group" style="margin-bottom: 10px;">
-            <label>品类方向</label>
-            <input type="text" id="scaffold-prod-cat" class="form-control" value="车品内饰">
-          </div>
-          <button class="btn btn-primary btn-sm" onclick="runScaffoldProduct()">⚡ 立即规范创建产品</button>
-        </div>
-
-        <!-- 新建脚本 -->
-        <div class="stat-card">
-          <h3 style="font-size: 15px; margin-bottom: 12px; color: #34d399;">🎬 新建脚本子目录</h3>
-          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">在产品下创建脚本，自动配齐 00_脚本说明.md、母版占位与迁移目录，并在产品索引中追加卡片。</p>
-          <div class="form-group" style="margin-bottom: 10px;">
-            <label>所属产品</label>
-            <select id="scaffold-script-prod" class="form-control"></select>
-          </div>
-          <div class="form-group" style="margin-bottom: 10px;">
-            <label>脚本名称</label>
-            <input type="text" id="scaffold-script-name" class="form-control" placeholder="例如: 直出脚本F">
-          </div>
-          <button class="btn btn-primary btn-sm" onclick="runScaffoldScript()">⚡ 立即规范创建脚本</button>
-        </div>
-
-        <!-- 新建变体 -->
-        <div class="stat-card">
-          <h3 style="font-size: 15px; margin-bottom: 12px; color: #f59e0b;">🎨 新建变体提示词文件 (防重拦截)</h3>
-          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">自动检测场景名是否重复，分配两位自增序号（如 C_V2_16_场景名.md）。</p>
-          <div class="form-group" style="margin-bottom: 10px;">
-            <label>场景中文名</label>
-            <input type="text" id="scaffold-var-scene" class="form-control" placeholder="例如: 湖畔露营地">
-          </div>
-          <button class="btn btn-primary btn-sm" onclick="runScaffoldVariant()">⚡ 立即生成变体提示词</button>
-        </div>
-
-      </div>
-    </div>
-
-    <!-- 选项卡 4：原生插件助手 -->
-    <div id="tab-plugin" class="tab-content">
-      <div class="stat-card" style="max-width: 900px; margin: 0 auto;">
-        <h3 style="font-size: 16px; margin-bottom: 10px; color: #60a5fa;">🧩 VG 豆包全自动生产与无水印下载原生扩展 (vg_extension)</h3>
-        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px; line-height: 1.6;">
-          本工作台采用原生 Chrome 扩展（Manifest V3），彻底免去油猴脚本权限弹窗与同步困扰。扩展已内置在工作台的 <code>vg_extension/</code> 源码目录中。
-        </p>
-        <div style="background: #0b1120; border: 1px solid var(--card-border); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
-          <h4 style="font-size: 14px; color: #fff; margin-bottom: 8px;">🚀 安装与更新说明 (仅需首次配置一次)：</h4>
-          <ol style="font-size: 13px; color: #cbd5e1; padding-left: 20px; line-height: 1.8;">
-            <li>在 Chrome 浏览器中访问 <code>chrome://extensions</code>；</li>
-            <li>开启右上角【开发者模式】开关；</li>
-            <li>点击左上角【加载已解压的扩展程序】，选择下方的插件文件夹；</li>
-            <li>后续如扩展更新，只需在扩展管理页点击卡片上的 🔄 刷新图标并在豆包网页按 F5 即可。</li>
-          </ol>
-        </div>
-        <button class="btn btn-primary" onclick="openExtensionFolder()" style="background: linear-gradient(135deg, #2563eb, #10b981); border: none; font-weight: 700; height: 38px; padding: 0 18px;">
-          📁 一键打开原生插件源码目录 (vg_extension)
-        </button>
-      </div>
-    </div>
   </main>
 
   <!-- 提示词查看弹窗 -->
@@ -406,7 +379,7 @@
   <!-- 手动新增任务弹窗 -->
   <div class="modal-overlay" id="add-task-modal">
     <div class="modal-box" style="max-width: 550px;">
-      <div class="modal-title">➕ 新增生产任务到当前流水线</div>
+      <div class="modal-title">➕ 新增生产任务到当前任务列表</div>
       <div style="margin-bottom: 14px;">
         <label style="display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 6px;">从当前产品中选择变体脚本文件：</label>
         <select id="modal-add-select-file" class="form-control" style="font-size: 12px;">
@@ -419,16 +392,16 @@
       </div>
       <div class="modal-foot">
         <button class="btn btn-outline btn-sm" onclick="closeAddTaskModal()">取消</button>
-        <button class="btn btn-primary btn-sm" onclick="submitAddTask()">➕ 追加到流水线</button>
+        <button class="btn btn-primary btn-sm" onclick="submitAddTask()">➕ 追加到任务列表</button>
       </div>
     </div>
   </div>
 
-  <!-- 历史快照与回滚弹窗 -->
+  <!-- 历史记录与回滚弹窗 -->
   <div class="modal-overlay" id="snapshot-modal">
     <div class="modal-box" style="max-width: 750px;">
-      <div class="modal-title">📅 生产流水线自动历史快照与回滚</div>
-      <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">系统在每次保存排产或变更时自动生成时间戳快照，可随时载入恢复历史任务状态：</div>
+      <div class="modal-title">📅 恢复历史任务</div>
+      <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">任务变更时会自动保存记录。选择一条记录可恢复当时的任务列表：</div>
       <div id="snapshot-list-container" style="max-height: 50vh; overflow-y: auto;">
         <!-- 快照列表动态渲染 -->
       </div>
@@ -456,7 +429,7 @@
   <div class="drawer-overlay" id="task-picker-drawer">
     <div class="drawer-box">
       <div class="drawer-head">
-        <h3><span>📁</span> 从资产目录勾选添加任务 (支持多选 3-5 个)</h3>
+        <h3><span>📁</span> 选择提示词（可多选）</h3>
         <button class="btn btn-outline btn-sm" onclick="closeTaskPickerDrawer()" style="padding: 4px 10px;">✕ 关闭</button>
       </div>
       <div class="drawer-body">
@@ -497,14 +470,14 @@
       <div class="drawer-foot">
         <div style="display: flex; align-items: center; gap: 10px;">
           <span style="font-size: 13px; font-weight: 600; color: #fff;" id="picker-selected-summary">
-            已勾选 <span style="color: #60a5fa; font-size: 15px; font-weight: 800;" id="picker-selected-count">0</span> 个提示词，共计 <span style="color: #34d399; font-size: 15px; font-weight: 800;" id="picker-selected-tasks-count">0</span> 条流水线任务
+            已勾选 <span style="color: #60a5fa; font-size: 15px; font-weight: 800;" id="picker-selected-count">0</span> 个提示词，共计 <span style="color: #34d399; font-size: 15px; font-weight: 800;" id="picker-selected-tasks-count">0</span> 条任务列表任务
           </span>
-          <span style="font-size: 12px; color: var(--text-muted);">(纯追加模式：顺延添加到流水线末尾)</span>
+          <span style="font-size: 12px; color: var(--text-muted);">（添加后保留现有任务）</span>
         </div>
         <div style="display: flex; gap: 10px;">
           <button class="btn btn-outline btn-sm" onclick="closeTaskPickerDrawer()">取消</button>
           <button class="btn btn-primary btn-sm" id="btn-submit-picker" onclick="submitTaskPicker()" style="background: linear-gradient(135deg, #2563eb, #10b981); border: none; font-weight: 700; padding: 6px 18px;">
-            🚀 批量加入流水线
+            🚀 添加到制作任务
           </button>
         </div>
       </div>
@@ -540,14 +513,119 @@
       if (targetContent) targetContent.classList.add('active');
     }
 
+    async function loadSettings() {
+      try {
+        const res = await fetch('/api/settings');
+        const json = await res.json();
+        if (json.code === 0 && json.data) {
+          const dirInput = document.getElementById('custom-download-dir');
+          if (dirInput && json.data.download_dir) {
+            dirInput.value = json.data.download_dir;
+          }
+        }
+      } catch (e) {
+        console.error('加载系统设置失败:', e);
+      }
+    }
+
+    function getCustomDownloadDir() {
+      const el = document.getElementById('custom-download-dir');
+      return el ? el.value.trim() : '';
+    }
+
+    async function saveDownloadDirSetting(val) {
+      const dir = val ? val.trim() : '';
+      try {
+        const res = await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ download_dir: dir })
+        });
+        const json = await res.json();
+        if (json.code === 0) {
+          showToast('💾 成片保存目录已设置并保存！');
+        }
+      } catch (e) {
+        console.error('保存设置失败:', e);
+      }
+    }
+
+    async function chooseDownloadDirFromExplorer() {
+      const btn = document.getElementById('btn-choose-download-dir');
+      const origText = btn ? btn.innerHTML : '📁 修改路径';
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '⏳ 等待选择...';
+      }
+      showToast('🔍 正在弹出文件夹选择窗口，请在弹出的系统窗口中选择目标目录...');
+      try {
+        const curDir = getCustomDownloadDir();
+        const res = await fetch('/api/settings/choose_download_dir', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ current_dir: curDir })
+        });
+        const json = await res.json();
+        if (json.code === 0 && json.path) {
+          const dirInput = document.getElementById('custom-download-dir');
+          if (dirInput) dirInput.value = json.path;
+          showToast('✅ 已成功修改成片保存路径: ' + json.path);
+        } else {
+          // 弹窗未选择、取消或系统拦截时，无缝呼出网页输入框兜底，确保新手随时能修改
+          const manual = prompt('若系统选择窗口未弹出（或已取消），您可以直接在此粘贴成片保存的文件夹路径：', curDir);
+          if (manual !== null && manual.trim()) {
+            const cleanPath = manual.trim().replace(/\\/g, '/');
+            const dirInput = document.getElementById('custom-download-dir');
+            if (dirInput) dirInput.value = cleanPath;
+            await saveDownloadDirSetting(cleanPath);
+          }
+        }
+      } catch (err) {
+        console.error('选择目录请求失败:', err);
+        const curDir = getCustomDownloadDir();
+        const manual = prompt('系统弹窗调用异常，您可以直接在此粘贴成片保存路径：', curDir);
+        if (manual !== null && manual.trim()) {
+          const cleanPath = manual.trim().replace(/\\/g, '/');
+          const dirInput = document.getElementById('custom-download-dir');
+          if (dirInput) dirInput.value = cleanPath;
+          await saveDownloadDirSetting(cleanPath);
+        }
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = origText;
+        }
+      }
+    }
+
+    async function openCurrentDownloadDir() {
+      const dir = getCustomDownloadDir();
+      try {
+        const res = await fetch('/api/vg/open_material_folder', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ download_dir: dir })
+        });
+        const json = await res.json();
+        if (json.code === 0) {
+          showToast('已在资源管理器中打开成片目录！');
+        } else {
+          alert('打开目录失败: ' + json.message);
+        }
+      } catch (e) {
+        alert('打开目录异常: ' + e);
+      }
+    }
+
     async function refreshAll() {
+      await loadSettings();
       await loadAccounts();
       await loadVGTree();
       await loadTasks();
       startTaskPolling();
     }
 
-    // 1. 账号矩阵相关
+    // 1. 账号管理相关
     async function loadAccounts() {
       try {
         const res = await fetch('/api/accounts');
@@ -560,19 +638,21 @@
       }
     }
 
-    function renderAccounts(filter = 'all') {
+    let currentAccountFilter = 'all';
+    function renderAccounts(filter = currentAccountFilter) {
+      currentAccountFilter = filter;
       const grid = document.getElementById('accounts-grid');
       grid.innerHTML = '';
       
       const filtered = globalAccounts.filter(acc => {
-        if (filter === 'ready') return acc.status !== 'disabled' && acc.remaining_10s > 0;
+        if (filter === 'ready') return acc.status !== 'disabled' && (acc.remaining_10s > 0 || acc.remaining_5s > 0 || acc.remaining_15s > 0);
         if (filter === 'disabled') return acc.status === 'disabled';
         return true;
       });
 
       filtered.forEach(acc => {
         const isDisabled = acc.status === 'disabled';
-        const isReady = !isDisabled && acc.remaining_10s > 0;
+        const isReady = !isDisabled && (acc.remaining_10s > 0 || acc.remaining_5s > 0 || acc.remaining_15s > 0);
         const card = document.createElement('div');
         card.className = `account-card ${isDisabled ? 'disabled' : (isReady ? 'ready' : 'exhausted')}`;
 
@@ -592,8 +672,8 @@
           `;
         } else {
           actionButtons = `
-            <button class="btn btn-primary btn-sm" style="flex: 1;" onclick="launchChrome('${acc.id}')">🚀 打开此号</button>
-            <button class="btn btn-outline btn-sm" onclick="updateQuota('${acc.id}', -1)" title="消耗一条10秒">-1条</button>
+            <button class="btn btn-primary btn-sm" onclick="launchChrome('${acc.id}')">🚀 打开此号</button>
+            <button class="btn btn-outline btn-sm" onclick="openQuotaCalibration('${acc.id}')">校准额度</button>
             <button class="btn btn-danger btn-sm" onclick="toggleAccountDisabled('${acc.id}', true)" title="禁用此账号 (智能与手动分配均排除)">🚫 禁用</button>
             <button class="btn btn-outline btn-sm" onclick="markExhausted('${acc.id}')" title="标记耗尽">空</button>
           `;
@@ -603,10 +683,8 @@
           <div class="account-card-header">
             <div>
               <div class="account-name" style="display: flex; align-items: center; gap: 6px;">
-                <span style="font-size: 11px; padding: 1px 5px; border-radius: 4px; background: #334155; color: #93c5fd; font-weight: 700;">#${String(acc.seq || '').padStart(2, '0')}</span>
                 <span>${acc.name}</span>
               </div>
-              <div class="account-sub">${acc.id}</div>
             </div>
             ${statusBadge}
           </div>
@@ -614,15 +692,15 @@
           <div class="quota-meters" style="${isDisabled ? 'opacity: 0.5;' : ''}">
             <div class="quota-item">
               <div class="quota-num">${acc.remaining_10s}</div>
-              <div class="quota-tag">10秒条数</div>
+              <div class="quota-tag">10秒</div>
             </div>
             <div class="quota-item">
               <div class="quota-num" style="color: #34d399;">${acc.remaining_5s}</div>
-              <div class="quota-tag">5秒条数</div>
+              <div class="quota-tag">5秒</div>
             </div>
             <div class="quota-item">
               <div class="quota-num" style="color: #f59e0b;">${acc.remaining_15s}</div>
-              <div class="quota-tag">15秒条数</div>
+              <div class="quota-tag">15秒</div>
             </div>
           </div>
 
@@ -638,18 +716,18 @@
       const totalCount = globalAccounts.length;
       const activeAccs = globalAccounts.filter(a => a.status !== 'disabled');
       document.getElementById('stat-total-acc').innerText = `${activeAccs.length} / ${totalCount} 个`;
-      const readyAccs = activeAccs.filter(a => a.remaining_10s > 0);
+      const readyAccs = activeAccs.filter(a => a.remaining_10s > 0 || a.remaining_5s > 0 || a.remaining_15s > 0);
       document.getElementById('stat-ready-acc').innerText = readyAccs.length + ' 个';
       const total10s = activeAccs.reduce((sum, a) => sum + (a.remaining_10s || 0), 0);
       document.getElementById('stat-total-10s').innerText = total10s + ' 条';
 
-      // 动态更新选项卡和标题中的账号数量
+      // 标题保持固定，账号数量在统计区展示。
       const tabMatrixBtn = document.getElementById('tab-btn-matrix');
-      if (tabMatrixBtn) tabMatrixBtn.innerText = `⚡ ${totalCount} 账号算力矩阵`;
+      if (tabMatrixBtn) tabMatrixBtn.innerText = '⚡ 账号管理';
       const matrixHeading = document.getElementById('matrix-title-heading');
-      if (matrixHeading) matrixHeading.innerText = `${totalCount} 账号算力池监控网格`;
+      if (matrixHeading) matrixHeading.innerText = '账号与剩余次数';
       const resetBtn = document.getElementById('btn-reset-accounts');
-      if (resetBtn) resetBtn.innerText = `🌅 ${totalCount} 账号今日满血重置`;
+      if (resetBtn) resetBtn.innerText = '🌅 重置今日剩余次数';
     }
 
     function filterAccounts(type) {
@@ -666,7 +744,7 @@
       const json = await res.json();
       globalAccounts = json.data;
 
-      // 如果禁用该账号，联动解绑当前流水线中分配给它的未发送任务！
+      // 如果禁用该账号，联动解绑当前任务列表中分配给它的未发送任务！
       if (disable) {
         let unbindCount = 0;
         currentTasks.forEach(t => {
@@ -687,13 +765,227 @@
       updateStats();
     }
 
+    let extensionSetupRequest = null;
+
+    function showExtensionSetup(json, endpoint, payload) {
+      extensionSetupRequest = { endpoint, payload, accountId: json.account_id };
+      let dialog = document.getElementById('extension-setup-dialog');
+      if (!dialog) {
+        dialog = document.createElement('dialog');
+        dialog.id = 'extension-setup-dialog';
+        dialog.style.cssText = 'width:min(640px,90vw);max-height:85vh;overflow:auto;padding:28px;background:#0f172a;color:#e2e8f0;border:1px solid #475569;border-radius:16px;';
+        dialog.innerHTML = `
+          <h3 style="margin:0 0 12px;font-size:22px">首次安装 VG 插件</h3>
+          <p id="extension-setup-account"></p>
+          <div style="padding:16px;background:#1e293b;border-radius:10px;margin:16px 0">
+            <button class="btn btn-primary" id="extension-setup-open" onclick="reopenExtensionSetup()" style="width:100%;padding:14px;font-size:17px;font-weight:700;background:#2563eb;border:0">① 打开扩展安装页</button>
+            <p style="margin:12px 0 0;line-height:1.7">打开后，在安装页右上角开启 <strong style="color:#93c5fd">开发者模式</strong>。</p>
+          </div>
+          <div style="padding:16px;background:#1e293b;border-radius:10px;margin:16px 0">
+            <button class="btn btn-primary" id="extension-setup-folder" onclick="openExtensionFolder()" disabled style="width:100%;padding:14px;font-size:17px;font-weight:700;background:#059669;border:0">② 打开插件文件夹位置</button>
+            <p style="margin:12px 0 0;line-height:1.7">将文件管理器中选中的整个 <strong style="color:#6ee7b7">vg_extension 文件夹</strong>，拖进刚才的扩展安装页。<strong>不用打开文件夹，也不用拖里面的文件。</strong></p>
+          </div>
+          <details style="font-size:13px;color:#94a3b8;margin:14px 0"><summary style="cursor:pointer">拖动不成功？使用路径安装</summary>
+            <p>点击扩展安装页的「加载已解压的扩展程序」，选择下方路径。若插件已列出，请开启其开关。</p>
+            <input id="extension-install-path" readonly style="box-sizing:border-box;width:100%;padding:10px;background:#1e293b;color:#fff;border:1px solid #475569;border-radius:6px">
+            <button class="btn btn-outline btn-sm" onclick="copyExtensionPath()" style="margin-top:8px">复制插件路径</button>
+          </details>
+          <p id="extension-setup-status" style="color:#fbbf24;font-size:13px">每个 Chrome 账号首次安装一次。安装完成后点击下方按钮继续。</p>
+          <div style="display:flex;gap:10px;justify-content:flex-end">
+            <button class="btn btn-outline" onclick="document.getElementById('extension-setup-dialog').close()">稍后安装</button>
+            <button class="btn btn-primary" id="extension-setup-check" onclick="checkExtensionAndContinue()" style="padding:12px 18px;font-weight:700">③ 已安装，检查并继续</button>
+          </div>`;
+        document.body.appendChild(dialog);
+      }
+      const account = globalAccounts.find(a => a.id === json.account_id);
+      document.getElementById('extension-setup-account').textContent = `账号：${account ? account.name : json.account_id}。${json.data.reason || ''}`;
+      document.getElementById('extension-install-path').value = json.data.install_path;
+      document.getElementById('extension-setup-folder').disabled = true;
+      document.getElementById('extension-setup-status').textContent = '先点击蓝色按钮打开安装页，再点击绿色按钮打开插件文件夹位置。';
+      if (!dialog.open) dialog.showModal();
+    }
+
+    async function copyExtensionPath() {
+      const input = document.getElementById('extension-install-path');
+      try {
+        await navigator.clipboard.writeText(input.value);
+        showToast('插件路径已复制');
+      } catch (_) {
+        input.focus();
+        input.select();
+        showToast('路径已选中，请按 Ctrl+C 复制');
+      }
+    }
+
+    async function openExtensionFolder() {
+      const status = document.getElementById('extension-setup-status');
+      try {
+        const res = await fetch('/api/vg/open_folder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'extension_install' }) });
+        const json = await res.json();
+        if (json.code !== 0) throw new Error(json.message || '文件夹打开失败');
+        status.textContent = '把文件管理器中选中的 vg_extension 文件夹拖进扩展安装页，完成后点击「③ 已安装，检查并继续」。';
+      } catch (err) {
+        status.textContent = '打开文件夹失败：' + err.message;
+      }
+    }
+
+    async function reopenExtensionSetup() {
+      if (!extensionSetupRequest) return;
+      const button = document.getElementById('extension-setup-open');
+      const status = document.getElementById('extension-setup-status');
+      button.disabled = true;
+      button.textContent = '正在打开安装页…';
+      try {
+        const res = await fetch('/api/extensions/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ account_id: extensionSetupRequest.accountId }) });
+        const json = await res.json();
+        if (!json.page_opened) throw new Error(json.message || '安装页打开失败');
+        document.getElementById('extension-setup-folder').disabled = false;
+        status.textContent = '请在打开的账号窗口中开启「开发者模式」，然后点击绿色按钮打开插件文件夹位置。';
+      } catch (err) {
+        status.textContent = '打开安装页失败：' + err.message;
+      } finally {
+        button.disabled = false;
+        button.textContent = '① 打开扩展安装页';
+      }
+    }
+
+    async function requestAccountLaunch(endpoint, payload) {
+      const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const json = await res.json();
+      if (json.setup_required) {
+        showExtensionSetup(json, endpoint, payload);
+        return false;
+      }
+      if (json.code !== 0) {
+        showToast(json.message || '打开失败');
+        return false;
+      }
+      return true;
+    }
+
+    async function checkExtensionAndContinue() {
+      if (!extensionSetupRequest) return;
+      const pending = extensionSetupRequest;
+      const button = document.getElementById('extension-setup-check');
+      const status = document.getElementById('extension-setup-status');
+      button.disabled = true;
+      try {
+        const res = await fetch('/api/extensions/status?account_id=' + encodeURIComponent(pending.accountId));
+        const json = await res.json();
+        if (json.code !== 0 || !json.data.enabled) {
+          status.textContent = '尚未检测到已启用的 VG 插件。请确认装在此账号中；若刚完成安装，请稍等几秒后重新检查。';
+          return;
+        }
+        document.getElementById('extension-setup-dialog').close();
+        if (await requestAccountLaunch(pending.endpoint, pending.payload)) {
+          const resumedIds = pending.payload.task_ids || (pending.payload.task_id ? [pending.payload.task_id] : []);
+          resumedIds.forEach(id => selectedTaskIds.delete(id));
+          if (resumedIds.length) renderKanban();
+          showToast('插件检查通过，已继续打开账号或任务');
+        }
+      } catch (_) {
+        status.textContent = '检查失败，请确认工作台服务正在运行后重试。';
+      } finally {
+        button.disabled = false;
+      }
+    }
+
     async function launchChrome(profileId) {
-      showToast('正在唤起 Chrome ' + profileId + '...');
-      await fetch('/api/accounts/launch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: profileId })
-      });
+      showToast('正在打开 Chrome ' + profileId + '...');
+      if (await requestAccountLaunch('/api/accounts/launch', { id: profileId })) showToast('已打开 Chrome ' + profileId);
+    }
+
+    let calibrationAccountId = '';
+
+    async function initializeLibrary() {
+      const res = await fetch('/api/vg/initialize', {method:'POST'});
+      const json = await res.json();
+      if (json.code !== 0) throw new Error(json.message || '创建 VG 文件夹失败');
+      return json.data;
+    }
+
+    async function openLibraryGuide() {
+      try { const state = await initializeLibrary(); await showLibraryGuide(state.vg_root); }
+      catch (err) { showToast(err.message); }
+    }
+
+    function showLibraryGuide(root) {
+      let dialog = document.getElementById('library-guide-dialog');
+      if (!dialog) {
+        dialog = document.createElement('dialog');
+        dialog.id = 'library-guide-dialog';
+        dialog.style.cssText = 'width:min(680px,92vw);max-height:85vh;overflow:auto;padding:26px;background:#0f172a;color:#e2e8f0;border:1px solid #475569;border-radius:14px';
+        dialog.innerHTML = `<h3 style="margin:0 0 12px;font-size:22px">VG 文件与识别说明</h3><p id="library-root" style="color:#6ee7b7;word-break:break-all"></p>
+          <h4>① 文件怎么放</h4><p style="font-size:13px;line-height:1.8">按时长人工分类：5秒、10秒、15秒分别放进对应目录。每个脚本一个文件夹，提示词和「产品参考图」放在一起。</p>
+          <pre style="background:#1e293b;padding:14px;line-height:1.7;border-radius:8px;font-size:12px">桌面/VG/
+├─ 5秒/
+├─ 10秒/
+│  └─ 脚本名/
+│     ├─ 产品参考图/  ← 1.png、2.png 等图片
+│     ├─ 提示词01.md
+│     └─ 提示词02.md
+└─ 15秒/</pre>
+          <h4>② 时长按文件夹决定</h4><p style="font-size:13px;line-height:1.8">5秒目录内全部按5秒，10秒目录内全部按10秒，15秒目录内全部按15秒。分类对子文件夹同样生效，不读取提示词里的秒数或时间戳，也无需确认时长。要改变时长，请移动提示词及参考图所在的脚本文件夹，再重新添加任务。</p>
+          <h4>③ 图片怎么上传</h4><p style="font-size:13px;line-height:1.8">上传当前任务对应脚本文件夹内「产品参考图」的全部 PNG、JPG、JPEG、WEBP 图片，包括子文件夹里的图片，按相对文件名排序。不按提示词筛选，不跨脚本取图，不截取前10张。同名但路径不同的图片分别上传；没有图片时仅填写提示词。</p>
+          <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px"><button class="btn btn-outline" onclick="openVGFolder()">打开桌面 VG</button><button class="btn btn-primary" onclick="document.getElementById('library-guide-dialog').close()">我知道了</button></div>`;
+        document.body.appendChild(dialog);
+      }
+      document.getElementById('library-root').textContent = '文件位置：' + root;
+      return new Promise(resolve => { dialog.addEventListener('close', resolve, {once:true}); if (!dialog.open) dialog.showModal(); });
+    }
+
+    async function resolveDurationsBeforeAdd(items) {
+      const res = await fetch('/api/durations/resolve', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({paths:items.map(item => item.path)})});
+      const json = await res.json();
+      if (json.code !== 0) throw new Error(json.message);
+      const byPath = new Map(json.data.map(item => [item.path, item]));
+      const invalid = items.filter(item => !['5s','10s','15s'].includes(byPath.get(item.path)?.spec));
+      if (invalid.length) throw new Error('尚未添加任务：请先将提示词放入 VG 下的「5秒」「10秒」或「15秒」文件夹。');
+      return json.data;
+    }
+
+    function openQuotaCalibration(profileId) {
+      const account = globalAccounts.find(a => a.id === profileId);
+      if (!account) return;
+      calibrationAccountId = profileId;
+      let dialog = document.getElementById('quota-calibration-dialog');
+      if (!dialog) {
+        dialog = document.createElement('dialog');
+        dialog.id = 'quota-calibration-dialog';
+        dialog.style.cssText = 'width:min(420px,90vw);padding:24px;background:#0f172a;color:#e2e8f0;border:1px solid #475569;border-radius:12px';
+        dialog.innerHTML = `<h3 style="margin:0 0 12px">手动校准额度</h3><p id="quota-calibration-account"></p>
+          <p style="font-size:13px;color:#94a3b8;margin:12px 0">按豆包页面显示的剩余次数填写。每天零点会自动恢复默认额度。</p>
+          <div style="display:flex;gap:12px;margin:16px 0">${['5s','10s','15s'].map(spec => `<label style="flex:1">${spec.replace('s','秒')}<input class="form-control" id="calibrate-${spec}" type="number" min="0" max="999" step="1" required style="margin-top:6px"></label>`).join('')}</div>
+          <p id="quota-calibration-error" style="color:#f87171;font-size:13px"></p>
+          <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px"><button class="btn btn-outline" onclick="document.getElementById('quota-calibration-dialog').close()">取消</button><button id="quota-calibration-save" class="btn btn-primary" onclick="saveQuotaCalibration()">保存校准</button></div>`;
+        document.body.appendChild(dialog);
+      }
+      document.getElementById('quota-calibration-account').textContent = account.name;
+      ['5s','10s','15s'].forEach(spec => document.getElementById('calibrate-' + spec).value = account['remaining_' + spec] || 0);
+      document.getElementById('quota-calibration-error').textContent = '';
+      if (!dialog.open) dialog.showModal();
+    }
+
+    async function saveQuotaCalibration() {
+      const payload = { id: calibrationAccountId };
+      for (const spec of ['5s','10s','15s']) {
+        const input = document.getElementById('calibrate-' + spec);
+        if (!input.reportValidity()) return;
+        payload['remaining_' + spec] = Number(input.value);
+      }
+      const button = document.getElementById('quota-calibration-save');
+      button.disabled = true;
+      try {
+        const res = await fetch('/api/accounts/calibrate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        const json = await res.json();
+        if (json.code !== 0) throw new Error(json.message || '校准失败');
+        globalAccounts = json.data;
+        renderAccounts(); updateStats(); renderKanban();
+        document.getElementById('quota-calibration-dialog').close();
+        showToast('额度已按实际剩余次数校准');
+      } catch (err) {
+        document.getElementById('quota-calibration-error').textContent = err.message;
+      } finally { button.disabled = false; }
     }
 
     async function updateQuota(profileId, delta) {
@@ -722,28 +1014,21 @@
     }
 
     async function resetAllAccounts() {
-      if (!confirm('确定将所有 26 个账号满血重置吗？')) return;
+      if (!confirm('确定将全部账号的剩余次数重置为初始值吗？请先确认豆包实际额度已恢复。')) return;
       const res = await fetch('/api/accounts/reset', { method: 'POST' });
       const json = await res.json();
       globalAccounts = json.data;
       renderAccounts();
       updateStats();
-      showToast('全员 26 账号已满血重置！');
+      showToast('全部账号的剩余次数已重置。');
     }
 
-    // 2. VG 联动与流水线
+    // 2. VG 联动与任务列表
     async function loadVGTree() {
       const res = await fetch('/api/vg/tree');
       const json = await res.json();
       globalVGTree = json.data || [];
       
-      const selScaffoldProd = document.getElementById('scaffold-script-prod');
-      if (selScaffoldProd) {
-        selScaffoldProd.innerHTML = '';
-        globalVGTree.forEach(p => {
-          selScaffoldProd.innerHTML += `<option value="${p.name}">${p.name}</option>`;
-        });
-      }
     }
 
     // ================= 树状/目录式多选抽屉管理器 =================
@@ -752,7 +1037,12 @@
     let activePickerFolderIndex = 0;
     let currentFolderFilesCache = [];
 
-    function openTaskPickerDrawer() {
+    async function openTaskPickerDrawer() {
+      try {
+        const state = await initializeLibrary();
+        if (state.first_run) await showLibraryGuide(state.vg_root);
+        await loadVGTree();
+      } catch (err) { showToast(err.message); return; }
       if (!globalVGTree || globalVGTree.length === 0) {
         alert('正在加载产品目录树，请稍候...');
         return;
@@ -874,7 +1164,8 @@
             name: f.name,
             title: f.title || f.name.replace('.md', ''),
             path: f.path,
-            spec: f.spec || '10s',
+            spec: f.spec || '',
+            spec_requires_confirmation: !!f.spec_requires_confirmation,
             prodName: prod ? prod.name : '',
             folderRel: folder ? folder.rel_path : '',
             repeatCount: count
@@ -940,7 +1231,7 @@
           <div class="file-pick-info">
             <div class="file-pick-title" title="${f.name}" style="display: flex; align-items: center; gap: 6px;">
               <span>${f.title || f.name.replace('.md', '')}</span>
-              <span style="font-size: 10px; padding: 1px 5px; border-radius: 4px; background: #334155; color: #93c5fd; font-weight: normal;">${f.spec || '10s'}</span>
+              <span style="font-size: 10px; padding: 1px 5px; border-radius: 4px; background: #334155; color: #93c5fd; font-weight: normal;">${f.spec || '未分类'}</span>
             </div>
             <div class="file-pick-path" title="${f.path}">📄 ${f.name}</div>
           </div>
@@ -962,7 +1253,8 @@
               name: f.name,
               title: f.title || f.name.replace('.md', ''),
               path: f.path,
-              spec: f.spec || '10s',
+              spec: f.spec || '',
+            spec_requires_confirmation: !!f.spec_requires_confirmation,
               prodName: prod ? prod.name : '',
               folderRel: folder ? folder.rel_path : '',
               repeatCount: rCount
@@ -1009,7 +1301,8 @@
             name: f.name,
             title: f.title || f.name.replace('.md', ''),
             path: f.path,
-            spec: f.spec || '10s',
+            spec: f.spec || '',
+            spec_requires_confirmation: !!f.spec_requires_confirmation,
             prodName: prod ? prod.name : '',
             folderRel: folder ? folder.rel_path : '',
             repeatCount: existing ? existing.repeatCount : batchCount
@@ -1036,15 +1329,32 @@
 
       const btn = document.getElementById('btn-submit-picker');
       if (btn) {
-        btn.innerText = totalTasks > 0 ? `🚀 批量加入流水线 (+${totalTasks}条)` : '🚀 批量加入流水线';
+        btn.innerText = totalTasks > 0 ? `🚀 添加到制作任务 (+${totalTasks}条)` : '🚀 添加到制作任务';
       }
     }
 
-    // 保证生成全局严格唯一的任务ID (如 V01, V02，绝不与已有任务冲突)
-    function generateUniqueTaskId() {
+    // 获取全局严格单调递增的秒级时间戳 (绝不重复)
+    function getUniqueTimestampSec() {
+      let nowSec = Math.floor(Date.now() / 1000);
+      const storedSec = parseInt(localStorage.getItem('vg_last_task_sec') || '0', 10);
+      let lastSec = Math.max(storedSec, window.__lastTaskSec || 0);
+      if (nowSec <= lastSec) {
+        nowSec = lastSec + 1;
+      }
+      window.__lastTaskSec = nowSec;
+      try { localStorage.setItem('vg_last_task_sec', String(nowSec)); } catch (e) {}
+      
+      const d = new Date(nowSec * 1000);
+      const pad = (n) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+    }
+
+    // 保证生成全局严格唯一的任务ID (如 V01_20261014_175023，带秒级独特时间戳编码，清空后绝不冲突)
+    function generateUniqueTaskId(fixedTimestamp) {
+      const timeStr = fixedTimestamp || getUniqueTimestampSec();
       const existingNums = new Set(
         currentTasks.map(t => {
-          const m = t.id && t.id.match(/^V(\d+)$/);
+          const m = t.id && t.id.match(/^V(\d+)/i);
           return m ? parseInt(m[1], 10) : 0;
         })
       );
@@ -1052,29 +1362,49 @@
       while (existingNums.has(next)) {
         next++;
       }
-      return `V${String(next).padStart(2, '0')}`;
+      return `V${String(next).padStart(2, '0')}_${timeStr}`;
     }
 
     // 纯追加模式提交任务（支持各提示词按设定次数拆分为独立任务）
-    function submitTaskPicker() {
+    let pickerSubmitting = false;
+    async function submitTaskPicker() {
+      if (pickerSubmitting) return;
+      pickerSubmitting = true;
+      const button = document.getElementById('btn-submit-picker');
+      button.disabled = true;
+      try { await submitTaskPickerConfirmed(); }
+      catch (err) { showToast(err.message || '添加失败'); }
+      finally { pickerSubmitting = false; button.disabled = false; }
+    }
+
+    async function submitTaskPickerConfirmed() {
       if (pickerSelectedFiles.size === 0) {
         alert('请至少勾选一个提示词文件！');
         return;
       }
 
       const addedList = Array.from(pickerSelectedFiles.values());
+      const durations = await resolveDurationsBeforeAdd(addedList);
+      if (!durations) return;
+      const durationMap = new Map(durations.map(item => [item.path, item]));
+      addedList.forEach(item => Object.assign(item, durationMap.get(item.path)));
+      await loadAccounts();
       let newAddedCount = 0;
+      const newTaskIds = [];
+      const batchTimestamp = getUniqueTimestampSec();
 
       addedList.forEach(item => {
         const repeats = Math.max(1, parseInt(item.repeatCount || 1, 10));
         for (let r = 1; r <= repeats; r++) {
-          const uniqueId = generateUniqueTaskId();
+          const uniqueId = generateUniqueTaskId(batchTimestamp);
+          newTaskIds.push(uniqueId);
           const taskTitle = repeats > 1 ? `${item.title} #${r}` : item.title;
           currentTasks.push({
             id: uniqueId,
             title: taskTitle,
             path: item.path,
-            spec: item.spec || '10s',
+            spec: item.spec || '',
+            spec_requires_confirmation: !!item.spec_requires_confirmation,
             assignedAccount: '',
             sent: false,
             downloaded: false,
@@ -1084,36 +1414,11 @@
         }
       });
 
+      const assignedCount = autoAssignAccountsSmart(true, newTaskIds, false);
       saveTasksState();
       renderKanban();
       closeTaskPickerDrawer();
-      showToast(`🎉 成功顺延追加 ${newAddedCount} 条流水线任务（来自 ${addedList.length} 个提示词）！`);
-    }
-
-    // 打开当前产品参考图目录
-    function openCurrentProductRefFolderDirect() {
-      let prodName = '';
-      if (currentTasks.length > 0 && currentTasks[0].path) {
-        const p = currentTasks[0].path;
-        const m = p.match(/(\d{3}_[^\/]+)/);
-        if (m) prodName = m[1];
-      }
-      if (!prodName && globalVGTree.length > 0) {
-        prodName = globalVGTree[0].name;
-      }
-
-      if (!prodName) {
-        alert('未检测到当前产品目录');
-        return;
-      }
-
-      const path = `C:\\Users\\admin\\DeskBox\\其他\\VG\\${prodName}\\产品参考图`;
-      fetch('/api/vg/open_folder', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: path })
-      });
-      showToast(`已在资源管理器中打开 [${prodName}] 的产品参考图`);
+      showToast(`已添加 ${newAddedCount} 条任务并自动分配 ${assignedCount} 条。${assignedCount < newAddedCount ? `剩余 ${newAddedCount - assignedCount} 条额度不足，待分配。` : ''}`);
     }
 
     function onProductChange() {
@@ -1172,11 +1477,12 @@
 
       // 如果有变体文件，取前 15 个；如果不足 15 个，自动补齐占位
       currentTasks = [];
+      const batchTimestamp = getUniqueTimestampSec();
       const count = Math.max(15, variantFiles.length);
       for (let i = 0; i < count; i++) {
         const v = variantFiles[i];
         currentTasks.push({
-          id: `V${String(i+1).padStart(2, '0')}`,
+          id: `V${String(i+1).padStart(2, '0')}_${batchTimestamp}`,
           title: v ? v.name.replace('.md', '') : `变体场景_${i+1}`,
           path: v ? v.path : '',
           assignedAccount: '',
@@ -1186,7 +1492,7 @@
         });
       }
       renderKanban();
-      showToast(`已生成 ${currentTasks.length} 条今日流水线任务！`);
+      showToast(`已生成 ${currentTasks.length} 条今日任务列表任务！`);
       saveTasksState();
     }
 
@@ -1214,7 +1520,7 @@
 
     function setTaskFilter(filterType) {
       currentTaskFilter = filterType;
-      ['all', 'waiting_sent', 'ready_video', 'downloaded'].forEach(ft => {
+      ['all', 'waiting_sent', 'generating', 'ready_video', 'downloaded'].forEach(ft => {
         const btn = document.getElementById(`tab-filter-${ft}`);
         if (btn) btn.classList.toggle('active', ft === filterType);
       });
@@ -1233,7 +1539,7 @@
     // ================= 看板任务勾选与批量管理 =================
     let selectedTaskIds = new Set();
 
-    // 动态净化孤儿 ID，保证 selectedTaskIds 严格只包含当前流水线真实存在的任务
+    // 动态净化孤儿 ID，保证 selectedTaskIds 严格只包含当前任务列表真实存在的任务
     function sanitizeSelectedTaskIds() {
       const existing = new Set(currentTasks.map(t => t.id));
       for (const id of Array.from(selectedTaskIds)) {
@@ -1247,6 +1553,7 @@
     function getVisibleFilteredTasks() {
       return currentTasks.filter(task => {
         if (currentTaskFilter === 'waiting_sent') return !task.sent;
+        if (currentTaskFilter === 'generating') return task.sent && !task.video_url && !task.video_ready && !task.downloaded;
         if (currentTaskFilter === 'ready_video') return (task.video_url || task.video_ready) && !task.downloaded;
         if (currentTaskFilter === 'downloaded') return task.downloaded;
         return true;
@@ -1302,7 +1609,7 @@
         if (cb) cb.checked = isSelected;
       });
 
-      // 1. 统计勾选任务中真正【待发送】(可唤起) 的任务数量
+      // 1. 统计勾选任务中真正【待发送】(可打开) 的任务数量
       const waitingToLaunch = currentTasks.filter(t => selectedTaskIds.has(t.id) && !t.sent);
       const countEl = document.getElementById('selected-tasks-count');
       if (countEl) countEl.innerText = waitingToLaunch.length;
@@ -1316,6 +1623,9 @@
       const totalSelected = selectedTaskIds.size;
       const tipEl = document.getElementById('selected-tasks-tip');
       if (tipEl) tipEl.innerText = `(已勾选 ${totalSelected} 条)`;
+
+      const delCountEl = document.getElementById('delete-selected-count');
+      if (delCountEl) delCountEl.innerText = totalSelected;
 
       const allCb = document.getElementById('select-all-kanban-cb');
       if (allCb) {
@@ -1339,10 +1649,12 @@
       list.innerHTML = '';
 
       let countWaitingSent = 0;
+      let countGenerating = 0;
       let countReadyVideo = 0;
       let countDownloaded = 0;
 
       currentTasks.forEach(t => {
+        if (t.sent && !t.video_url && !t.video_ready && !t.downloaded) countGenerating++;
         if (!t.sent) {
           countWaitingSent++;
         }
@@ -1357,16 +1669,19 @@
       // 更新徽标
       const bAll = document.getElementById('badge-all');
       const bSent = document.getElementById('badge-waiting_sent');
+      const bGenerating = document.getElementById('badge-generating');
       const bReady = document.getElementById('badge-ready_video');
       const bDl = document.getElementById('badge-downloaded');
       if (bAll) bAll.innerText = currentTasks.length;
       if (bSent) bSent.innerText = countWaitingSent;
+      if (bGenerating) bGenerating.innerText = countGenerating;
       if (bReady) bReady.innerText = countReadyVideo;
       if (bDl) bDl.innerText = countDownloaded;
 
       // 根据筛选器过滤
-      const filteredTasksWithIdx = currentTasks.map((t, idx) => ({ task: t, origIdx: idx })).filter(item => {
+      const filteredTasksWithIdx = currentTasks.map((t, idx) => ({ task: t, origIdx: idx })).reverse().filter(item => {
         if (currentTaskFilter === 'waiting_sent') return !item.task.sent;
+        if (currentTaskFilter === 'generating') return item.task.sent && !item.task.video_url && !item.task.video_ready && !item.task.downloaded;
         if (currentTaskFilter === 'ready_video') return (item.task.video_url || item.task.video_ready) && !item.task.downloaded;
         if (currentTaskFilter === 'downloaded') return item.task.downloaded;
         return true;
@@ -1376,8 +1691,8 @@
         list.innerHTML = `
           <div style="background: var(--card-bg); border: 1px dashed var(--card-border); border-radius: 8px; padding: 40px; text-align: center; color: var(--text-muted);">
             <div style="font-size: 28px; margin-bottom: 10px;">📋</div>
-            <div style="font-size: 14px;">当前分类下暂无任务</div>
-            <div style="font-size: 12px; margin-top: 4px;">可在上方点击【全部】查看，或点击【📁 挑选添加任务】</div>
+            <div style="font-size: 14px;">当前分类下没有任务</div>
+            <div style="font-size: 12px; margin-top: 4px;">可在上方点击【全部】查看，或点击【📁 1. 选择提示词】</div>
           </div>
         `;
       } else {
@@ -1402,7 +1717,7 @@
           });
 
           // 时长规格徽标样式
-          const specText = task.spec || '10s';
+          const specText = task.spec_requires_confirmation ? '未放入秒数目录' : (task.spec || '10s');
           let specBadgeBg = '#3b82f625';
           let specBadgeColor = '#60a5fa';
           let specBadgeBorder = '#3b82f640';
@@ -1420,20 +1735,24 @@
           let autoStatusBadge = '';
           const hasVideoUrl = !!(task.video_url || task.video_ready);
           if (task.downloaded) {
-            autoStatusBadge = '<span class="badge-status-pill badge-saved" title="无水印成片已下载入库【成品/素材/】">💾 素材已入库</span>';
+            autoStatusBadge = '<span class="badge-status-pill badge-saved" title="无水印成片已下载保存【成品/素材/】">💾 已下载</span>';
           } else if (hasVideoUrl) {
             autoStatusBadge = '<span class="badge-status-pill badge-ready" title="扩展已捕获无水印直链，可一键下载">🎬 视频就绪</span>';
           } else if (task.sent) {
             autoStatusBadge = '<span class="badge-status-pill badge-sent" title="已成功自动注词注图，豆包正在生成中">🔵 豆包生成中</span>';
           } else {
-            autoStatusBadge = '<span class="badge-status-pill badge-waiting" title="等待唤起或手动导入">⚪ 待发送</span>';
+            autoStatusBadge = '<span class="badge-status-pill badge-waiting" title="等待打开或手动导入">⚪ 待发送</span>';
           }
 
           // 视频操作按钮（预览 / 下载）
           let videoActionBtns = '';
-          if (hasVideoUrl || task.downloaded) {
-            videoActionBtns = `
+          if (task.downloaded) {
+            videoActionBtns += `
               <button class="btn btn-outline btn-sm" onclick="previewTaskVideo(${idx})" style="color: #c084fc; border-color: #8b5cf660;" title="在网页中直接无水印播放成片">▶️ 预览</button>
+            `;
+          }
+          if (hasVideoUrl || task.downloaded) {
+            videoActionBtns += `
               <button class="btn btn-outline btn-sm" onclick="downloadSingleVideo(${idx})" style="color: #34d399; border-color: #10b98160;" title="下载无水印成片到【成品/素材/】">📥 下载</button>
             `;
           }
@@ -1446,9 +1765,12 @@
 
           card.innerHTML = `
             <div style="display: flex; align-items: center; justify-content: center;">
-              <input type="checkbox" class="task-select-cb" ${isTaskSelected ? 'checked' : ''} onchange="toggleSelectTask('${task.id}', this.checked)" onclick="event.stopPropagation()" title="勾选以批量唤起或下载此任务">
+              <input type="checkbox" class="task-select-cb" ${isTaskSelected ? 'checked' : ''} onchange="toggleSelectTask('${task.id}', this.checked)" onclick="event.stopPropagation()" title="勾选以批量打开或下载此任务">
             </div>
-            <div class="kanban-id">${task.id}</div>
+            <div class="kanban-id" title="任务全局唯一编码: ${task.id}" style="display: flex; flex-direction: column; align-items: flex-start; justify-content: center; line-height: 1.15;">
+              <span style="font-weight: 800; font-size: 14px; color: #60a5fa;">${task.id.split('_')[0]}</span>
+              ${task.id.includes('_') ? `<span style="font-size: 10px; color: #94a3b8; font-family: monospace; letter-spacing: -0.4px;">${task.id.split('_').slice(1).join('_')}</span>` : ''}
+            </div>
             <div>
               <div class="kanban-title" style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                 <span>${task.title}</span>
@@ -1466,8 +1788,6 @@
               </div>
             </div>
             <div style="display: flex; gap: 4px; flex-wrap: wrap;">
-              <button class="btn btn-outline btn-sm" onclick="switchTaskWindow('${task.id}', '${task.assignedAccount || ''}')" style="color: #38bdf8; border-color: #38bdf860;" title="瞬间将该任务所在的 Chrome 窗口置顶到最前台">🎯 切到窗口</button>
-              <button class="btn btn-primary btn-sm" onclick="launchSingleTask(${idx})" title="唤起分配账号并自动导入词和图">🚀 唤起</button>
               ${videoActionBtns}
               <button class="btn btn-outline btn-sm" onclick="viewPrompt(${idx})">📄 查词</button>
             </div>
@@ -1498,7 +1818,7 @@
       const doneCount = currentTasks.filter(t => t.downloaded).length;
       const pct = currentTasks.length ? Math.round((doneCount / currentTasks.length) * 100) : 0;
       const progressLabel = document.getElementById('kanban-progress-label');
-      if (progressLabel) progressLabel.innerText = `素材入库进度: ${doneCount} / ${currentTasks.length} (${pct}%)`;
+      if (progressLabel) progressLabel.innerText = `成片下载进度: ${doneCount} / ${currentTasks.length} (${pct}%)`;
       const progressFill = document.getElementById('kanban-progress-fill');
       if (progressFill) progressFill.style.width = pct + '%';
 
@@ -1522,19 +1842,20 @@
     }
 
     // 智能贪心均衡分配账号（支持 5s/10s/15s 动态规格计算与严格排除禁用账号）
-    function autoAssignAccountsSmart(silent = false) {
+    function autoAssignAccountsSmart(silent = false, targetTaskIds = null, persist = true) {
       if (currentTasks.length === 0) {
-        if (!silent) alert('当前流水线中没有任务，请先加载或新增任务！');
+        if (!silent) alert('当前任务列表中没有任务，请先加载或新增任务！');
         return 0;
       }
 
-      const unassignedTasks = currentTasks.filter(t => !t.assignedAccount && !t.sent);
+      const targetIds = targetTaskIds ? new Set(targetTaskIds) : null;
+      const unassignedTasks = currentTasks.filter(t => !t.assignedAccount && !t.sent && !t.spec_requires_confirmation && (!targetIds || targetIds.has(t.id)));
       if (unassignedTasks.length === 0) {
         if (!silent) showToast('所有待发送任务均已分配了账号！');
         return 0;
       }
 
-      // 统计账号当前已在流水线中分配且未发送的消耗点数（以10秒标称单位折算：5s=0.5点, 10s=1.0点, 15s=1.25点）
+      // 统计账号当前已在任务列表中分配且未发送的消耗点数（以10秒标称单位折算：5s=0.5点, 10s=1.0点, 15s=1.25点）
       const alreadyAssignedCost = {};
       currentTasks.forEach(t => {
         if (t.assignedAccount && !t.sent) {
@@ -1547,7 +1868,8 @@
       const candidateAccounts = globalAccounts.filter(a => {
         if (a.status === 'disabled' || a.status === 'exhausted') return false;
         const usedCost = alreadyAssignedCost[a.id] || 0;
-        return (a.remaining_10s - usedCost) >= 0.49;
+        const budget = Math.max(a.remaining_10s || 0, (a.remaining_5s || 0) / 2, (a.remaining_15s || 0) * 1.25);
+        return (budget - usedCost) >= 0.49;
       });
 
       if (candidateAccounts.length === 0) {
@@ -1556,27 +1878,25 @@
       }
 
       let assignedCount = 0;
-      let accIdx = 0;
-
       for (const task of unassignedTasks) {
         const taskCost = task.spec === '5s' ? 0.5 : (task.spec === '15s' ? 1.25 : 1.0);
-        while (accIdx < candidateAccounts.length) {
-          const acc = candidateAccounts[accIdx];
+        const specKey = task.spec === '5s' ? 'remaining_5s' : (task.spec === '15s' ? 'remaining_15s' : 'remaining_10s');
+        for (const acc of candidateAccounts) {
           const curCost = alreadyAssignedCost[acc.id] || 0;
-          if (curCost + taskCost <= acc.remaining_10s + 0.01) {
+          const budget = Math.max(acc.remaining_10s || 0, (acc.remaining_5s || 0) / 2, (acc.remaining_15s || 0) * 1.25);
+          if (curCost + taskCost <= budget + 0.01 && curCost + taskCost <= (acc[specKey] || 0) * taskCost + 0.01) {
             task.assignedAccount = acc.id;
             alreadyAssignedCost[acc.id] = curCost + taskCost;
             assignedCount++;
             break;
-          } else {
-            accIdx++;
           }
         }
-        if (accIdx >= candidateAccounts.length) break;
       }
 
-      saveTasksState();
-      renderKanban();
+      if (persist) {
+        saveTasksState();
+        renderKanban();
+      }
       if (!silent) {
         showToast(`⚡ 智能调度完成！已按各场景时长规格为 ${assignedCount} 条任务均衡分配可用账号`);
       }
@@ -1591,11 +1911,6 @@
       currentTasks[origIdx] = currentTasks[targetIdx];
       currentTasks[targetIdx] = tmp;
 
-      // 重新标准化 ID
-      currentTasks.forEach((t, i) => {
-        t.id = `V${String(i+1).padStart(2, '0')}`;
-      });
-
       saveTasksState();
       renderKanban();
     }
@@ -1603,17 +1918,29 @@
     // 单条删除
     function deleteTask(origIdx) {
       const t = currentTasks[origIdx];
-      if (!confirm(`确定从流水线中删除任务 [${t.id}] ${t.title} 吗？`)) return;
+      if (!confirm(`确定从任务列表中删除任务 [${t.id}] ${t.title} 吗？`)) return;
       currentTasks.splice(origIdx, 1);
-
-      // 重新标准化 ID
-      currentTasks.forEach((item, i) => {
-        item.id = `V${String(i+1).padStart(2, '0')}`;
-      });
-
       saveTasksState();
       renderKanban();
-      showToast('任务已从流水线中移除');
+      updateSelectedActionUI();
+      showToast('任务已从任务列表中移除');
+    }
+
+    // 批量删除勾选的任务
+    function deleteSelectedTasks() {
+      if (!selectedTaskIds || selectedTaskIds.size === 0) {
+        showToast('请先勾选需要删除的任务！');
+        return;
+      }
+      const count = selectedTaskIds.size;
+      if (!confirm(`确定删除当前已勾选的 ${count} 条任务吗？\n（已删除任务已自动保存快照，可随时在历史记录中恢复）`)) return;
+
+      currentTasks = currentTasks.filter(t => !selectedTaskIds.has(t.id));
+      selectedTaskIds.clear();
+      saveTasksState();
+      renderKanban();
+      updateSelectedActionUI();
+      showToast(`已成功删除勾选的 ${count} 条任务！`);
     }
 
     // 批量操作下拉菜单切换
@@ -1632,9 +1959,6 @@
     function batchCleanFinished() {
       const beforeLen = currentTasks.length;
       currentTasks = currentTasks.filter(t => !t.edited);
-      currentTasks.forEach((t, i) => {
-        t.id = `V${String(i+1).padStart(2, '0')}`;
-      });
       const removed = beforeLen - currentTasks.length;
       saveTasksState();
       renderKanban();
@@ -1643,7 +1967,7 @@
 
     // 一键清空所有任务的账号分配
     function batchClearAccountAssignments() {
-      if (!confirm('确定清空当前流水线所有任务的账号分配吗？')) return;
+      if (!confirm('确定清空当前任务列表所有任务的账号分配吗？')) return;
       currentTasks.forEach(t => t.assignedAccount = '');
       saveTasksState();
       renderKanban();
@@ -1665,11 +1989,11 @@
 
     // 清空所有任务
     function batchClearAllTasks() {
-      if (!confirm('⚠️ 警告：确定清空当前整个流水线的所有任务吗？')) return;
+      if (!confirm('⚠️ 警告：确定清空当前整个任务列表的所有任务吗？')) return;
       currentTasks = [];
       saveTasksState();
       renderKanban();
-      showToast('流水线已清空');
+      showToast('任务列表已清空');
     }
 
     // 新增任务弹窗
@@ -1707,7 +2031,7 @@
       document.getElementById('add-task-modal').classList.remove('active');
     }
 
-    function submitAddTask() {
+    async function submitAddTask() {
       const selectFile = document.getElementById('modal-add-select-file');
       const path = selectFile.value;
       const title = document.getElementById('modal-add-title').value.trim();
@@ -1717,27 +2041,33 @@
         return;
       }
 
-      const newId = `V${String(currentTasks.length + 1).padStart(2, '0')}`;
+      const durations = await resolveDurationsBeforeAdd([{path}]);
+      if (!durations) return;
+      await loadAccounts();
+      const newId = generateUniqueTaskId();
       currentTasks.push({
         id: newId,
         title: title || `新增场景_${currentTasks.length + 1}`,
         path: path,
+        spec: durations[0].spec,
+        spec_requires_confirmation: false,
         assignedAccount: '',
         sent: false,
         downloaded: false,
         edited: false
       });
 
+      const assignedCount = autoAssignAccountsSmart(true, [newId], false);
       saveTasksState();
       renderKanban();
       closeAddTaskModal();
-      showToast(`已成功追加新任务 [${newId}] 到流水线末尾！`);
+      showToast(`已添加任务 [${newId}]，${assignedCount ? '已自动分配账号' : '额度不足，待分配'}。最新任务显示在最前。`);
     }
 
-    // 历史快照与回滚
+    // 历史记录与回滚
     async function openSnapshotsModal() {
       const container = document.getElementById('snapshot-list-container');
-      container.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-muted);">正在加载历史快照...</div>';
+      container.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-muted);">正在加载历史记录...</div>';
       document.getElementById('snapshot-modal').classList.add('active');
 
       try {
@@ -1746,7 +2076,7 @@
         const snaps = json.data || [];
 
         if (snaps.length === 0) {
-          container.innerHTML = '<div style="padding: 30px; text-align: center; color: var(--text-muted);">暂无历史快照，在流水线保存或排产时系统会自动记录。</div>';
+          container.innerHTML = '<div style="padding: 30px; text-align: center; color: var(--text-muted);">暂无历史记录。添加或修改任务后，系统会自动保存记录。</div>';
           return;
         }
 
@@ -1804,7 +2134,7 @@
           currentTasks = json.data.tasks || [];
           renderKanban();
           closeSnapshotModal();
-          showToast('已成功回滚恢复历史快照！');
+          showToast('已成功回滚恢复历史记录！');
         } else {
           alert('恢复失败: ' + json.message);
         }
@@ -1813,7 +2143,7 @@
       }
     }
 
-    // 单个任务唤起并自动导入
+    // 单个任务打开并自动导入
     async function launchSingleTask(idx) {
       const task = currentTasks[idx];
       if (!task) return;
@@ -1821,33 +2151,29 @@
         alert('请先为此任务分配执行账号！');
         return;
       }
-      showToast(`正在唤起 [${task.assignedAccount}] 并自动导入任务 ${task.id}...`);
-      const res = await fetch('/api/accounts/launch_task', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ account_id: task.assignedAccount, task_id: task.id })
-      });
-      const json = await res.json();
-      if (json.code === 0) {
-        showToast(`已成功唤起！豆包将自动填入提示词并上传参考图`);
-      } else {
-        alert(json.message || '唤起失败');
+      showToast(`正在打开 [${task.assignedAccount}] 并自动导入任务 ${task.id}...`);
+      if (await requestAccountLaunch('/api/accounts/launch_task', { account_id: task.assignedAccount, task_id: task.id })) {
+        showToast(`已成功打开！豆包将自动填入提示词并上传参考图`);
       }
     }
 
-    // 勾选任务一键平滑唤起核心方法（按账号智能聚合多标签页启动，彻底解决并发丢任务与 Profile 竞争问题）
+    // 勾选任务一键平滑打开核心方法（按账号智能聚合多标签页启动，彻底解决并发丢任务与 Profile 竞争问题）
     async function launchSelectedTasks() {
       sanitizeSelectedTaskIds();
 
       if (selectedTaskIds.size === 0) {
-        alert('请先在下方列表中勾选需要唤起的生产任务！');
+        alert('请先在下方列表中勾选需要打开的生产任务！');
         return;
       }
 
-      // 严格红线过滤：一键唤起仅针对【未发送】(待发送) 的任务！已发送/已出片的任务绝不重复拉起
+      // 严格红线过滤：一键打开仅针对【未发送】(待发送) 的任务！已发送/已出片的任务绝不重复拉起
       const tasksToLaunch = currentTasks.filter(t => selectedTaskIds.has(t.id) && !t.sent);
+      if (tasksToLaunch.some(t => t.spec_requires_confirmation)) {
+        alert('部分任务未放入秒数目录，请先将文件放入5秒、10秒或15秒目录，再重新添加任务。');
+        return;
+      }
       if (tasksToLaunch.length === 0) {
-        alert('当前勾选的任务中没有【待发送】的任务！\n\n💡 提示：所勾选任务均已在豆包生成中或已完成入库。如需重新发送，请在顶部批量菜单中选择【重置任务执行状态】。');
+        alert('当前勾选的任务中没有【待发送】的任务！\n\n💡 提示：所勾选任务均已在豆包生成中或已完成保存。如需重新发送，请在顶部批量菜单中选择【重置任务执行状态】。');
         return;
       }
 
@@ -1857,7 +2183,7 @@
         autoAssignAccountsSmart(true); // 静默自动分配
         const stillUnassigned = tasksToLaunch.filter(t => !t.assignedAccount);
         if (stillUnassigned.length > 0) {
-          alert(`⚠️ 算力池可用额度不足！\n有 ${stillUnassigned.length} 条已选任务无法自动分配可用账号，请在账号矩阵中重置或调整账号额度后再试。`);
+          alert(`⚠️ 可用账号的剩余次数不足！\n有 ${stillUnassigned.length} 条已选任务无法自动分配可用账号，请在账号管理中核对剩余次数，或减少本次选择的任务后再试。`);
           return;
         }
       }
@@ -1875,28 +2201,28 @@
 
       // 3. 数量安全提示（若总任务超过 5 条则弹窗确认）
       if (totalTasks > 5) {
-        const confirmMsg = `【平滑唤起保护】\n当前勾选了 ${totalTasks} 条任务（涉及 ${totalAccounts} 个账号窗口），系统将按每 1.5 秒依次平滑拉起。\n\n是否立即开始唤起？`;
+        const confirmMsg = `【平滑打开保护】\n当前勾选了 ${totalTasks} 条任务（涉及 ${totalAccounts} 个账号窗口），系统将按每 1.5 秒依次平滑拉起。\n\n是否立即开始打开？`;
         if (!confirm(confirmMsg)) return;
       }
 
-      showToast(`🚀 开始为 ${totalAccounts} 个账号依次唤起 ${totalTasks} 条任务，请稍候...`);
+      showToast(`🚀 开始为 ${totalAccounts} 个账号依次打开 ${totalTasks} 条任务，请稍候...`);
 
       // 4. 循环平滑启动每个账号对应的任务标签页（账号之间间隔 1.5 秒）
       let accIndex = 0;
+      let openedTasks = 0;
       for (const [accId, groupTasks] of accountGroups.entries()) {
         accIndex++;
         const taskIds = groupTasks.map(t => t.id);
         const taskTitles = groupTasks.map(t => t.id).join(', ');
-        showToast(`[${accIndex}/${totalAccounts}] 正在唤起 [${accId}] (${groupTasks.length}条任务: ${taskTitles})...`);
+        showToast(`[${accIndex}/${totalAccounts}] 正在打开 [${accId}] (${groupTasks.length}条任务: ${taskTitles})...`);
 
         try {
-          await fetch('/api/accounts/launch_task', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ account_id: accId, task_ids: taskIds })
-          });
+          if (!await requestAccountLaunch('/api/accounts/launch_task', { account_id: accId, task_ids: taskIds })) break;
+          openedTasks += groupTasks.length;
+          groupTasks.forEach(t => selectedTaskIds.delete(t.id));
         } catch (err) {
-          console.warn('唤起账号任务失败:', accId, err);
+          console.warn('打开账号任务失败:', accId, err);
+          break;
         }
 
         if (accIndex < totalAccounts) {
@@ -1904,15 +2230,15 @@
         }
       }
 
-      showToast(`🎉 成功唤起全部 ${totalTasks} 条已选任务（${totalAccounts} 个账号窗口）！豆包将自动填入提示词并上传参考图`);
+      if (openedTasks === totalTasks) showToast(`🎉 成功打开全部 ${totalTasks} 条已选任务（${totalAccounts} 个账号窗口）！豆包将自动填入提示词并上传参考图`);
+      else showToast(`已打开 ${openedTasks} 条任务；其余任务保留勾选，完成插件安装后可继续。`);
 
-      // 5. 唤起成功后自动取消选中并刷新视图
-      selectedTaskIds.clear();
+      // 5. 打开成功后自动取消选中并刷新视图
       renderKanban();
     }
 
     // ================= 一键下载与视频预览 =================
-    // 单任务可视化平滑进度下载核心函数
+    // 单任务可视化真实 SSE 进度下载核心函数
     async function downloadTaskWithProgress(task) {
       const pContainer = document.getElementById(`dl-progress-${task.id}`);
       const pBar = document.getElementById(`dl-bar-${task.id}`);
@@ -1920,81 +2246,132 @@
       const pPct = document.getElementById(`dl-pct-text-${task.id}`);
       const statusContainer = document.getElementById(`status-container-${task.id}`);
 
+      // 1. 若尚未捕获视频，且任务处于已发状态，尝试自动打开打捞
+      if (!task.video_url && !task.video_ready && task.sent) {
+        if (pContainer) pContainer.style.display = 'block';
+        if (pStatus) {
+          pStatus.style.color = '#a855f7';
+          pStatus.innerText = '🔍 正在打开会话标签页打捞成片...';
+        }
+        if (pBar) pBar.style.width = '15%';
+        if (pPct) pPct.innerText = '打捞中';
+
+        try {
+          if (!await requestAccountLaunch('/api/task/recover_session', { task_id: task.id })) {
+            return { success: false, error: '请先完成此账号的插件安装' };
+          }
+          showToast(`已为任务 [${task.id}] 打开豆包标签页，正在打捞成片...`);
+
+          // 轮询等待成片上报 (最多等待 12 秒)
+          let recovered = false;
+          for (let check = 0; check < 8; check++) {
+            await new Promise(r => setTimeout(r, 1500));
+            const ctxRes = await fetch(`/api/task/context?task_id=${encodeURIComponent(task.id)}`);
+            const ctxJson = await ctxRes.json();
+            if (ctxJson.code === 0 && ctxJson.data && (ctxJson.data.video_url || ctxJson.data.video_ready)) {
+              task.video_url = ctxJson.data.video_url;
+              task.video_ready = true;
+              recovered = true;
+              break;
+            }
+          }
+
+          if (!recovered) {
+            if (pStatus) {
+              pStatus.style.color = '#ef4444';
+              pStatus.innerText = '❌ 打捞超时，请在打开的标签页确认视频生成完毕后重试';
+            }
+            return { success: false, error: '成片打捞超时，请确认豆包页面已生成完毕' };
+          }
+        } catch (e) {
+          return { success: false, error: `打开会话异常: ${e}` };
+        }
+      }
+
+      if (!task.video_url && !task.video_ready) {
+        return { success: false, error: '该任务尚未捕获到成片链接' };
+      }
+
       if (pContainer) pContainer.style.display = 'block';
-      if (pBar) pBar.style.width = '10%';
+      if (pBar) pBar.style.width = '5%';
       if (pStatus) {
         pStatus.style.color = '#60a5fa';
-        pStatus.innerText = '⏳ 正在请求素材...';
+        pStatus.innerText = '⏳ 正在建立视频下载流...';
       }
-      if (pPct) pPct.innerText = '10%';
+      if (pPct) pPct.innerText = '0%';
       if (statusContainer) {
         statusContainer.innerHTML = `<span class="badge-status-pill" style="background: #3b82f625; color: #60a5fa; border: 1px solid #3b82f650;">⏳ 下载中...</span>`;
       }
 
-      let currentPct = 10;
-      const timer = setInterval(() => {
-        if (currentPct < 90) {
-          currentPct += Math.max(1, Math.round((90 - currentPct) * 0.18));
-          if (pBar) pBar.style.width = currentPct + '%';
-          if (pPct) pPct.innerText = currentPct + '%';
-          if (pStatus) {
-            if (currentPct > 60) pStatus.innerText = '📥 正在写入磁盘...';
-            else if (currentPct > 30) pStatus.innerText = '⏳ 正在拉取视频流...';
+      return new Promise((resolve) => {
+        const customDir = getCustomDownloadDir();
+        const streamUrl = `/api/tasks/download_video_stream?task_id=${encodeURIComponent(task.id)}${customDir ? `&download_dir=${encodeURIComponent(customDir)}` : ''}`;
+        const es = new EventSource(streamUrl);
+
+        es.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.status === 'starting') {
+              if (pStatus) pStatus.innerText = data.message || '正在连接素材流...';
+            } else if (data.status === 'downloading') {
+              const pct = data.pct || 0;
+              if (pBar) pBar.style.width = pct + '%';
+              if (pPct) pPct.innerText = pct + '%';
+              if (pStatus) {
+                const dlMb = data.downloaded ? (data.downloaded / (1024 * 1024)).toFixed(1) + 'MB' : '';
+                const totalMb = data.total ? (data.total / (1024 * 1024)).toFixed(1) + 'MB' : '';
+                pStatus.innerText = `📥 ${dlMb} / ${totalMb} (${data.speed || ''})`;
+              }
+            } else if (data.status === 'completed') {
+              es.close();
+              if (pBar) pBar.style.width = '100%';
+              if (pPct) pPct.innerText = '100%';
+              if (pStatus) {
+                pStatus.style.color = '#34d399';
+                pStatus.innerText = '✅ 下载完成并保存！';
+              }
+              if (statusContainer) {
+                statusContainer.innerHTML = `<span class="badge-status-pill badge-saved" title="无水印成片已下载保存【成品/素材/】">💾 已下载</span>`;
+              }
+              task.downloaded = true;
+              task.video_ready = true;
+              if (data.file_path) {
+                task.local_video_path = data.file_path;
+              }
+              // 广播下载完成事件，触发扩展即时关闭对应豆包标签页
+              try {
+                window.postMessage({ type: 'VG_TASK_DOWNLOADED', taskId: task.id }, '*');
+              } catch (e) {}
+              updatePipelineProgress();
+              setTimeout(() => {
+                if (pContainer) pContainer.style.display = 'none';
+              }, 700);
+              resolve({ success: true });
+            } else if (data.status === 'error') {
+              es.close();
+              if (pStatus) {
+                pStatus.style.color = '#ef4444';
+                pStatus.innerText = `❌ ${data.message || '下载失败'}`;
+              }
+              if (statusContainer) {
+                statusContainer.innerHTML = `<span class="badge-status-pill badge-ready" style="color: #ef4444; border-color: #ef4444;">❌ 下载失败</span>`;
+              }
+              resolve({ success: false, error: data.message });
+            }
+          } catch (e) {
+            console.error('SSE JSON 解析异常', e);
           }
-        }
-      }, 120);
+        };
 
-      try {
-        const res = await fetch('/api/tasks/download_videos', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ task_ids: [task.id] })
-        });
-        const json = await res.json();
-        clearInterval(timer);
-
-        if (json.code === 0 && (!json.data.failed || json.data.failed.length === 0)) {
-          if (pBar) pBar.style.width = '100%';
-          if (pPct) pPct.innerText = '100%';
-          if (pStatus) {
-            pStatus.style.color = '#34d399';
-            pStatus.innerText = '✅ 下载完成并入库！';
-          }
-          if (statusContainer) {
-            statusContainer.innerHTML = `<span class="badge-status-pill badge-saved" title="无水印成片已下载入库【成品/素材/】">💾 素材已入库</span>`;
-          }
-
-          task.downloaded = true;
-          task.video_ready = true;
-          if (json.data && json.data.downloaded && json.data.downloaded[0]) {
-            task.local_video_path = json.data.downloaded[0].file_path;
-          }
-
-          updatePipelineProgress();
-
-          await new Promise(r => setTimeout(r, 700));
-          if (pContainer) pContainer.style.display = 'none';
-
-          return { success: true };
-        } else {
-          const errMsg = (json.data && json.data.failed && json.data.failed[0]) ? json.data.failed[0].error : (json.message || '下载失败');
+        es.onerror = (err) => {
+          es.close();
           if (pStatus) {
             pStatus.style.color = '#ef4444';
-            pStatus.innerText = `❌ ${errMsg}`;
+            pStatus.innerText = '❌ 连接断开或网络异常';
           }
-          if (statusContainer) {
-            statusContainer.innerHTML = `<span class="badge-status-pill badge-ready" style="color: #ef4444; border-color: #ef4444;">❌ 下载失败</span>`;
-          }
-          return { success: false, error: errMsg };
-        }
-      } catch (err) {
-        clearInterval(timer);
-        if (pStatus) {
-          pStatus.style.color = '#ef4444';
-          pStatus.innerText = `❌ 请求异常: ${err}`;
-        }
-        return { success: false, error: err };
-      }
+          resolve({ success: false, error: 'SSE 连接断开或网络异常' });
+        };
+      });
     }
 
     // 1. 批量下载已选任务中就绪的无水印视频 (逐条流式串行推进模式)
@@ -2033,7 +2410,7 @@
         const res = await downloadTaskWithProgress(t);
         if (res.success) {
           successCount++;
-          selectedTaskIds.delete(t.id); // 下载入库成功后自动取消勾选该任务
+          selectedTaskIds.delete(t.id); // 下载保存成功后自动取消勾选该任务
           updateSelectedTasksUI();
         } else {
           failCount++;
@@ -2042,7 +2419,16 @@
 
       if (dlBtn) dlBtn.disabled = false;
 
-      showToast(`🎉 全部下载流转完毕！成功入库 ${successCount}/${readyTasks.length} 条成片${failCount > 0 ? `，${failCount} 条失败` : ''}`);
+      if (successCount > 0) {
+        // 整批流转成功后统一保存一次带快照，防止单任务刷爆快照
+        await fetch('/api/tasks/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tasks: currentTasks })
+        }).catch(() => {});
+      }
+
+      showToast(`🎉 全部下载流转完毕！成功保存 ${successCount}/${readyTasks.length} 条成片${failCount > 0 ? `，${failCount} 条失败` : ''}`);
       await loadTasks(); // 重新拉取以确保状态持久化完全同步
     }
 
@@ -2051,6 +2437,19 @@
       const task = currentTasks[idx];
       if (!task) return;
       if (!task.video_url && !task.video_ready) {
+        if (task.sent && task.session_url) {
+          if (confirm(`任务 [${task.id}] 尚未捕获成片，但已记录会话网址。\n\n是否立即打开该会话标签页进行自动打捞成片？`)) {
+            showToast(`🔍 正在打开 [${task.id}] 会话打捞成片...`);
+            const res = await downloadTaskWithProgress(task);
+            if (res.success) {
+              showToast(`🎉 打捞并下载成功！文件已保存至【成品/素材/】`);
+              await loadTasks();
+            } else {
+              alert('打捞或下载未完成: ' + (res.error || ''));
+            }
+          }
+          return;
+        }
         alert('该任务尚未捕获到无水印成片链接！');
         return;
       }
@@ -2058,7 +2457,7 @@
       showToast(`📥 正在下载 [${task.id}] ${task.title}.mp4 到【成品/素材/】...`);
       const res = await downloadTaskWithProgress(task);
       if (res.success) {
-        showToast(`🎉 成功下载并入库！文件已保存至【成品/素材/】`);
+        showToast(`🎉 成功下载并保存！文件已保存至【成品/素材/】`);
         await loadTasks();
       } else {
         alert('下载失败: ' + (res.error || '未知网络异常'));
@@ -2068,7 +2467,7 @@
     // 3. 在线无水印视频预览弹窗
     function previewTaskVideo(idx) {
       const task = currentTasks[idx];
-      if (!task) return;
+      if (!task || !task.downloaded) return;
       
       const modal = document.getElementById('video-preview-modal');
       const titleEl = document.getElementById('video-preview-title');
@@ -2107,32 +2506,26 @@
       modal.classList.remove('active');
     }
 
-    // 4. 打开当前产品【成品/素材/】目录
+    // 4. 打开成片保存目录
     async function openProductMaterialFolderDirect() {
-      // 获取当前选中的产品或第一个任务对应的产品
+      const customDir = getCustomDownloadDir();
       let prodName = document.getElementById('select-product') ? document.getElementById('select-product').value : '';
-      if (!prodName && currentTasks.length > 0 && currentTasks[0].path) {
-        const match = currentTasks[0].path.match(/VG[\/\\]([^\/\\]+)/i);
-        if (match) prodName = match[1];
+      if (!prodName && currentTasks.length > 0 && currentTasks[0].product) {
+        prodName = currentTasks[0].product;
       }
       if (!prodName && globalVGTree && globalVGTree.length > 0) {
         prodName = globalVGTree[0].name;
-      }
-
-      if (!prodName) {
-        alert('请先选择产品！');
-        return;
       }
 
       try {
         const res = await fetch('/api/vg/open_material_folder', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ product: prodName })
+          body: JSON.stringify({ product: prodName, download_dir: customDir })
         });
         const json = await res.json();
         if (json.code === 0) {
-          showToast(`已在资源管理器中打开 [${prodName}] 的【成品/素材/】目录！`);
+          showToast(`已在资源管理器中打开成片目录！`);
         } else {
           alert('打开目录失败: ' + json.message);
         }
@@ -2151,18 +2544,14 @@
 
       const batch = readyTasks.slice(0, 5); // 限制每次最多并发 5 条
       const summaryList = batch.map(t => `• [${t.id}] ${t.title} -> ${t.assignedAccount}`).join('\n');
-      if (!confirm(`【电脑性能保护 - 并发5条】\n即将平稳启动以下 ${batch.length} 条任务窗口：\n\n${summaryList}\n\n是否立即唤起？`)) {
+      if (!confirm(`【电脑性能保护 - 并发5条】\n即将平稳启动以下 ${batch.length} 条任务窗口：\n\n${summaryList}\n\n是否立即打开？`)) {
         return;
       }
 
       for (let i = 0; i < batch.length; i++) {
         const t = batch[i];
-        showToast(`[${i + 1}/${batch.length}] 正在唤起 [${t.assignedAccount}] (任务 ${t.id})...`);
-        await fetch('/api/accounts/launch_task', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ account_id: t.assignedAccount, task_id: t.id })
-        });
+        showToast(`[${i + 1}/${batch.length}] 正在打开 [${t.assignedAccount}] (任务 ${t.id})...`);
+        if (!await requestAccountLaunch('/api/accounts/launch_task', { account_id: t.assignedAccount, task_id: t.id })) return;
         if (i < batch.length - 1) {
           await new Promise(r => setTimeout(r, 1800)); // 间隔 1.8 秒平滑展开
         }
@@ -2179,22 +2568,14 @@
       }
       const matched = currentTasks.filter(t => t.assignedAccount === accId && !t.sent);
       if (matched.length === 0) {
-        alert(`账号 [${accId}] 下目前没有未发送的流水线任务！`);
+        alert(`账号 [${accId}] 下目前没有未发送的任务列表任务！`);
         return;
       }
 
       const targetTasks = matched.slice(0, 5); // 限制最多5条
       showToast(`正在为账号 [${accId}] 打开 ${targetTasks.length} 个任务标签页并自动导入...`);
-      const res = await fetch('/api/accounts/launch_task', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ account_id: accId, task_ids: targetTasks.map(t => t.id) })
-      });
-      const json = await res.json();
-      if (json.code === 0) {
-        showToast(`已成功唤起！账号 [${accId}] 已打开 ${targetTasks.length} 个任务标签页`);
-      } else {
-        alert(json.message || '唤起失败');
+      if (await requestAccountLaunch('/api/accounts/launch_task', { account_id: accId, task_ids: targetTasks.map(t => t.id) })) {
+        showToast(`已成功打开！账号 [${accId}] 已打开 ${targetTasks.length} 个任务标签页`);
       }
     }
 
@@ -2266,6 +2647,7 @@
     }
 
     let taskPollingTimer = null;
+    let lastAccountsRefresh = 0;
 
     async function loadTasks(silent = false) {
       try {
@@ -2274,8 +2656,19 @@
         if (json.data && json.data.tasks) {
           const newTasks = json.data.tasks.map(t => {
             if (t.path) t.path = t.path.replace(/\\/g, '/');
-            if (!t.spec) t.spec = '10s';
+            if (!t.spec && !t.spec_requires_confirmation) t.spec = '10s';
             return t;
+          });
+
+          // 前端状态守卫：如果本地已标记 downloaded，绝不允许后台轮询将其冲刷倒退为 false（除非显式重置）
+          newTasks.forEach(nt => {
+            const existing = currentTasks.find(ct => ct.id === nt.id);
+            if (existing && existing.downloaded && !nt.downloaded) {
+              nt.downloaded = true;
+              if (existing.local_video_path && !nt.local_video_path) {
+                nt.local_video_path = existing.local_video_path;
+              }
+            }
           });
 
           // 如果是静默更新，检查是否有状态变化，有变化才重新渲染，避免打断用户操作
@@ -2283,10 +2676,12 @@
             const hasChanged = JSON.stringify(newTasks) !== JSON.stringify(currentTasks);
             if (hasChanged) {
               currentTasks = newTasks;
+              if (autoAssignAccountsSmart(true, null, false)) saveTasksState();
               renderKanban();
             }
           } else {
             currentTasks = newTasks;
+            if (autoAssignAccountsSmart(true, null, false)) saveTasksState();
             renderKanban();
           }
         }
@@ -2299,7 +2694,11 @@
     function startTaskPolling() {
       if (taskPollingTimer) clearInterval(taskPollingTimer);
       taskPollingTimer = setInterval(() => {
-        // 如果当前流水线有正在等待发送或出成片的任务，静默拉取
+        if (Date.now() - lastAccountsRefresh >= 60000) {
+          lastAccountsRefresh = Date.now();
+          loadAccounts();
+        }
+        // 如果当前任务列表有正在等待发送或出成片的任务，静默拉取
         const hasActiveTasks = currentTasks.some(t => !t.downloaded || !t.edited);
         if (hasActiveTasks) {
           loadTasks(true);
@@ -2307,7 +2706,11 @@
       }, 5000);
     }
 
-    function openVGFolder() {
+    async function openVGFolder() {
+      try {
+        const state = await initializeLibrary();
+        if (state.first_run) await showLibraryGuide(state.vg_root);
+      } catch (err) { showToast(err.message); return; }
       fetch('/api/vg/open_folder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2346,83 +2749,6 @@
       showToast(`已在文件管理器中打开 [${prodName}] 参考图目录`);
     }
 
-    function openExtensionFolder() {
-      fetch('/api/vg/open_folder', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: "extension" })
-      });
-      showToast('已在系统文件管理器中打开插件文件夹！请将其加载至 chrome://extensions 页面');
-    }
-
-    // 3. 脚手架操作
-    async function runScaffoldProduct() {
-      const name = document.getElementById('scaffold-prod-name').value.trim();
-      const cat = document.getElementById('scaffold-prod-cat').value.trim();
-      if (!name) { alert('请输入产品中文名称'); return; }
-      
-      const res = await fetch('/api/scaffold/run', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'new-product', name: name, category: cat })
-      });
-      const json = await res.json();
-      if (json.code === 0) {
-        alert('产品创建成功！已配齐骨架并更新总导航！');
-        document.getElementById('scaffold-prod-name').value = '';
-        await loadVGTree();
-      } else {
-        alert('创建失败: ' + json.message);
-      }
-    }
-
-    async function runScaffoldScript() {
-      const prod = document.getElementById('scaffold-script-prod').value;
-      const name = document.getElementById('scaffold-script-name').value.trim();
-      if (!name) { alert('请输入脚本名称'); return; }
-
-      const res = await fetch('/api/scaffold/run', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'new-script', product: prod, name: name })
-      });
-      const json = await res.json();
-      if (json.code === 0) {
-        alert('脚本目录创建成功！已生成说明文档并更新索引！');
-        document.getElementById('scaffold-script-name').value = '';
-        await loadVGTree();
-      } else {
-        alert('创建失败: ' + json.message);
-      }
-    }
-
-    async function runScaffoldVariant() {
-      const prod = document.getElementById('select-product').value;
-      const script = document.getElementById('select-script').value;
-      const scene = document.getElementById('scaffold-var-scene').value.trim();
-      if (!prod || !script) { alert('请先在上方流水线中选定产品与脚本！'); return; }
-      if (!scene) { alert('请输入场景名称！'); return; }
-
-      const res = await fetch('/api/scaffold/run', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'new-variant',
-          product: prod,
-          script: script,
-          scene: scene
-        })
-      });
-      const json = await res.json();
-      if (json.code === 0) {
-        alert('变体生成成功！' + json.output);
-        document.getElementById('scaffold-var-scene').value = '';
-        await loadVGTree();
-        await loadBatchTasks();
-      } else {
-        alert('防重拦截或失败: ' + json.message);
-      }
-    }
   </script>
 </body>
 </html>

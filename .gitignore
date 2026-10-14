@@ -3,17 +3,30 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# PyInstaller & Build artifacts
+build/
+dist/
+*.spec
+
+# Backups & Logs
+*.bak
+*.log
+*.tmp
+*.zip
+scratch/
+
+# Runtime & History Data
+data/history/
+data/runtime/
+data/quota_history/
+data/settings.json
+data/quota_reset.json
+
+# Sensitive User Data / Cookies
+data/doubao_cookies_export/
+
 # OS generated files
 Thumbs.db
 ehthumbs.db
 Desktop.ini
 .DS_Store
-
-# Temporary / Scratch files
-scratch/
-*.log
-*.tmp
-*.zip
-
-# Sensitive User Data / Cookies
-data/doubao_cookies_export/
